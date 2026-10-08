@@ -1,0 +1,12 @@
+primary:
+  name: "llama3.2:3b-instruct-q4_K_M"
+  provider: "ollama"
+  endpoint: "http://localhost:11434/api/generate"
+  num_ctx: 2048
+  temperature: 0.0
+evaluation_candidate:
+  name: "qwen2.5:7b-instruct-q4_K_M"
+  provider: "ollama"
+  endpoint: "http://localhost:11434/api/generate"
+  num_ctx: 2048
+  temperature: 0.0

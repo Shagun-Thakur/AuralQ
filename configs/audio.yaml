@@ -1,0 +1,12 @@
+ingestion:
+  target_sr: 22050
+  mono: true
+  min_duration_sec: 0.5
+  max_duration_sec: 300.0
+  clipping_threshold: 0.99
+  silence_threshold_db: -60.0
+supported_formats:
+  - ".wav"
+  - ".mp3"
+  - ".flac"
+  - ".ogg"

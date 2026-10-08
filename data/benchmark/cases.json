@@ -1,0 +1,35 @@
+[
+  {
+    "case_id": "BC_001",
+    "audio_type": "synthetic_sine_1000hz",
+    "question": "Is this audio recording noise-like or does it have tonal structure?",
+    "intent": "tonal_vs_noise_classification",
+    "expected_tools": ["spectral_flatness"],
+    "reference_evidence": {
+      "mean_flatness_max": 0.05
+    },
+    "expected_grounded_term": "tonal"
+  },
+  {
+    "case_id": "BC_002",
+    "audio_type": "synthetic_white_noise",
+    "question": "Does this recording sound bright or dull?",
+    "intent": "brightness_estimation",
+    "expected_tools": ["spectral_centroid"],
+    "reference_evidence": {
+      "mean_hz_min": 4500.0
+    },
+    "expected_grounded_term": "bright"
+  },
+  {
+    "case_id": "BC_003",
+    "audio_type": "synthetic_sine_1000hz",
+    "question": "Is this audio consistently loud or fluctuating?",
+    "intent": "loudness_stability",
+    "expected_tools": ["rms_energy"],
+    "reference_evidence": {
+      "dynamic_range_cv_max": 0.1
+    },
+    "expected_grounded_term": "consistent"
+  }
+]

@@ -1,0 +1,24 @@
+max_tool_budget: 3
+tolerance_percentage: 0.05
+tools:
+  - name: "rms_energy"
+    category: "energy"
+    intent_keywords: ["loudness", "volume", "consistent", "quiet", "amplitude", "dynamic range"]
+  - name: "zero_crossing_rate"
+    category: "temporal"
+    intent_keywords: ["smooth", "percussive", "noisy", "transient", "varying"]
+  - name: "spectral_centroid"
+    category: "spectral"
+    intent_keywords: ["bright", "dull", "sharp", "dark", "center frequency", "warm"]
+  - name: "spectral_bandwidth"
+    category: "spectral"
+    intent_keywords: ["spread", "wide", "narrow", "frequency range"]
+  - name: "spectral_rolloff"
+    category: "spectral"
+    intent_keywords: ["high frequency", "cutoff", "energy concentration", "rolloff"]
+  - name: "spectral_flatness"
+    category: "spectral"
+    intent_keywords: ["tonal", "noise", "hiss", "harmonic", "pure tone"]
+  - name: "mfcc"
+    category: "timbre"
+    intent_keywords: ["timbre", "texture", "color", "instrument"]
