@@ -63,6 +63,51 @@ class SpectrogramArgs(BaseToolArgs):
     output_path: Optional[str] = Field(default=None)
 
 
+class DatasetProfileArgs(BaseToolArgs):
+    """Arguments for dataset profiling and preprocessing recommendation."""
+    dataset_path: str = Field(description="Directory path containing the audio dataset.")
+    target_sr: Optional[int] = Field(default=22050, ge=8000, le=48000)
+    max_files: int = Field(default=2000, ge=1, le=5000)
+
+
+class PreprocessingAdviceModel(BaseModel):
+    """Structured, evidence-grounded recommendation for dataset preprocessing."""
+    action: str
+    priority: Literal["CRITICAL", "RECOMMENDED", "OPTIONAL"]
+    reason: str
+    affected_files_count: int
+    affected_files_percentage: float
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    canonical_citations: List[str] = Field(default_factory=list)
+
+
+class DatasetProfileModel(BaseModel):
+    """Comprehensive statistical distribution metrics for an audio corpus."""
+    total_files: int
+    total_duration_hours: float
+    format_counts: Dict[str, int]
+    sample_rate_counts: Dict[int, int]
+    channel_counts: Dict[int, int]
+    duration_stats: Dict[str, float]
+    rms_dbfs_stats: Dict[str, float]
+    spectral_centroid_mean_hz: float
+    spectral_flatness_mean: float
+    silent_files: List[str] = Field(default_factory=list)
+    clipped_files: List[str] = Field(default_factory=list)
+    corrupted_files: List[str] = Field(default_factory=list)
+    processing_time_sec: float
+
+
+class DatasetAdvisorResultModel(BaseModel):
+    """Encapsulates the complete dataset profile, anomaly audits, and advice."""
+    dataset_path: str
+    profile: DatasetProfileModel
+    recommendations: List[PreprocessingAdviceModel]
+    executive_summary: str
+    status: Literal["success", "empty_dataset", "error"]
+    warnings: List[str] = Field(default_factory=list)
+
+
 class ToolResultModel(BaseModel):
     """Universal structured result contract for all AuralQ DSP tools."""
     tool: str

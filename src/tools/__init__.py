@@ -1,5 +1,8 @@
-"""Layer 3: Deterministic DSP tools package for AuralQ."""
-
+from src.tools.dataset_advisor import (
+    dataset_profiler_tool,
+    generate_preprocessing_recommendations,
+)
+from src.tools.dataset_profiler import profile_audio_dataset
 from src.tools.energy import rms_energy
 from src.tools.registry import (
     TOOL_CATALOGUE,
@@ -10,7 +13,11 @@ from src.tools.registry import (
 )
 from src.tools.schemas import (
     BaseToolArgs,
+    DatasetAdvisorResultModel,
+    DatasetProfileArgs,
+    DatasetProfileModel,
     MFCCArgs,
+    PreprocessingAdviceModel,
     RMSEnergyArgs,
     SpectralBandwidthArgs,
     SpectralCentroidArgs,
@@ -40,12 +47,19 @@ __all__ = [
     "spectral_flatness",
     "mfcc",
     "spectrogram",
+    "dataset_profiler_tool",
+    "profile_audio_dataset",
+    "generate_preprocessing_recommendations",
     "execute_tool",
     "get_registered_tool_names",
     "get_tool_metadata",
     "list_tools_catalogue",
     "TOOL_CATALOGUE",
     "ToolResultModel",
+    "DatasetProfileArgs",
+    "DatasetProfileModel",
+    "PreprocessingAdviceModel",
+    "DatasetAdvisorResultModel",
     "BaseToolArgs",
     "RMSEnergyArgs",
     "ZeroCrossingRateArgs",

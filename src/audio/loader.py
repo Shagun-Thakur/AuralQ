@@ -1,12 +1,13 @@
 """Audio loading and preprocessing pipeline for AuralQ Layer 1."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 import librosa
 import numpy as np
 import soundfile as sf
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.audio.dataset_scanner import scan_dataset_directory
 from src.audio.validation import (
     AudioMetadata,
     ValidationResult,
@@ -20,11 +21,13 @@ from src.utils.config import get_audio_config
 
 
 class AudioLoadResult(BaseModel):
-    """Encapsulates the complete result of audio ingestion."""
+    """Encapsulates the complete result of audio ingestion (single-file or dataset)."""
     status: str = "SUCCESS"  # SUCCESS, FAIL, ABSTAIN
+    input_type: Literal["single_file", "dataset_directory"] = "single_file"
     error_code: Optional[str] = None
     message: str = "Audio loaded and preprocessed successfully"
     metadata: Optional[AudioMetadata] = None
+    dataset_file_count: Optional[int] = None
     # Waveform is excluded from Pydantic serialization for lightweight transport
     waveform: Optional[Any] = Field(default=None, exclude=True)
     sample_rate: int = 22050
@@ -131,7 +134,58 @@ def load_audio_file(
 
     return AudioLoadResult(
         status="SUCCESS",
+        input_type="single_file",
         metadata=meta,
         waveform=y,
         sample_rate=target_sr,
     )
+
+
+def load_audio_input(
+    input_path: str | Path,
+    config: Optional[Dict[str, Any]] = None,
+) -> AudioLoadResult:
+    """
+    Unified dual-mode ingestion dispatcher.
+    Accepts either an individual audio file OR an entire audio dataset directory.
+    """
+    path = Path(input_path)
+    if not path.exists():
+        return AudioLoadResult(
+            status="FAIL",
+            error_code="PATH_NOT_FOUND",
+            message=f"Provided path does not exist: {path}",
+        )
+
+    if path.is_dir():
+        files = scan_dataset_directory(path)
+        if not files:
+            return AudioLoadResult(
+                status="FAIL",
+                input_type="dataset_directory",
+                error_code="EMPTY_DATASET_DIRECTORY",
+                message=f"No supported audio files found in directory: {path}",
+            )
+        cfg = config or get_audio_config()
+        target_sr = int(cfg.get("ingestion", {}).get("target_sr", 22050))
+        meta = AudioMetadata(
+            file_path=str(path.resolve()),
+            duration_sec=0.0,
+            sample_rate=target_sr,
+            num_channels=0,
+            num_samples=0,
+            rms_dbfs=0.0,
+            warnings=[f"DATASET_INPUT: {len(files)} audio files discovered"],
+        )
+        return AudioLoadResult(
+            status="SUCCESS",
+            input_type="dataset_directory",
+            message=f"Discovered {len(files)} audio files in dataset directory.",
+            dataset_file_count=len(files),
+            metadata=meta,
+            sample_rate=target_sr,
+        )
+
+    # Individual file mode
+    return load_audio_file(path, config=config)
+

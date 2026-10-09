@@ -180,12 +180,13 @@ def test_tool_registry_and_dispatcher(synthetic_sine_1000hz):
     """Verify registry allowlist, metadata queries, and safe execution dispatch."""
     waveform, sr = synthetic_sine_1000hz
     tool_names = get_registered_tool_names()
-    assert len(tool_names) == 8
+    assert len(tool_names) == 9
     assert "rms_energy" in tool_names
     assert "spectral_centroid" in tool_names
+    assert "dataset_profiler" in tool_names
 
     catalogue = list_tools_catalogue()
-    assert len(catalogue) == 8
+    assert len(catalogue) == 9
 
     # Safe execution with valid arguments
     res = execute_tool("spectral_centroid", waveform, sr, {"n_fft": 2048})

@@ -22,3 +22,9 @@ tools:
   - name: "mfcc"
     category: "timbre"
     intent_keywords: ["timbre", "texture", "color", "instrument"]
+  - name: "spectrogram"
+    category: "visual"
+    intent_keywords: ["spectrogram", "visualize", "time-frequency", "plot", "display frequencies"]
+  - name: "dataset_profiler"
+    category: "dataset"
+    intent_keywords: ["dataset", "folder", "batch", "profile", "preprocess", "preprocessing", "audit", "recommendation", "clean"]

@@ -14,9 +14,9 @@ Audio signal processing provides measurable, interpretable evidence about the ac
                                     │
                                     ▼
        ┌────────────────────────────────────────────────────────┐
-       │             AuralQ Orchestration Layer                │
+       │             AuralQ Orchestration Layer                 │
        │   (Local LLM: llama3.2:3b-instruct-q4_K_M)             │
-       │   Intent Parsing  ──►  Tool Dispatch: spectral_flatness │
+       │   Intent Parsing  ──►  Tool Dispatch: spectral_flatness│
        └────────────────────────────┬───────────────────────────┘
                                     │
                                     ▼
@@ -88,18 +88,34 @@ AuralQ provides 8 core deterministic DSP tools with strict Pydantic v2 schemas:
 | `spectral_flatness` | Spectral | Ratio of geometric to arithmetic spectral mean | *"Is this noise-like or tonal?"* | `tonal` (≤0.05), `noise-like` (≥0.25) |
 | `mfcc` | Timbre | 13 Mel-Frequency Cepstral Coefficients | *"What is the timbral color or texture?"* | `static`, `dynamic timbre` |
 | `spectrogram` | Visual | STFT power sub-band ratios & headless plot | *"Show me frequency content over time"* | `bass`, `treble`, `mid-range balanced` |
+| `dataset_profiler` | Dataset | Stream-profiler & deterministic preprocessing advisor | *"Profile my dataset and tell me what preprocessing to use"* | `action_required`, `sound` |
 
 ---
 
-## 5. Audio Hygiene & Defensive Validation (Layer 1)
+## 5. Dual-Mode Audio Hygiene & Dataset Profiling (Layer 1 & Layer 3)
 
-All audio input is treated as untrusted data:
+AuralQ provides unified ingestion supporting both **Single Audio Files** and **Full Audio Datasets**:
 
+### 5.1 Single-File Audio Hygiene
 1. **Format Validation**: Strict allowlist (`.wav`, `.mp3`, `.flac`, `.ogg`).
 2. **Duration Guardrails**: Enforces bounds $[0.5\text{s}, 300.0\text{s}]$. Files outside bounds trigger an explicit `ABSTAIN`.
 3. **DC-Offset Blocking**: Applies mean-subtraction prior to any energy or silence evaluation.
 4. **Silence Gating**: Measures $\text{RMS dBFS} = 20 \log_{10}(\text{RMS} + \epsilon)$. If $\text{dBFS} < -60.0$, the pipeline safely aborts with `status="ABSTAIN"` and code `"AUDIO_SILENT"`.
-5. **Consecutive Clipping Detection**: Identifies flat-topped saturation runs ($\ge 3$ consecutive samples at $|y[n]| \ge 0.99$). When clipping exceeds $0.1\%$ of the signal, a structured `CLIPPING_WARNING` is injected into the evidence payload to alert the LLM that high-frequency harmonics may be contaminated by non-linear distortion.
+5. **Consecutive Clipping Detection**: Identifies flat-topped saturation runs ($\ge 3$ consecutive samples at $|y[n]| \ge 0.99$). When clipping exceeds $0.1\%$ of the signal, a structured `CLIPPING_WARNING` is injected into the evidence payload.
+
+### 5.2 Streaming Dataset Profiler & Preprocessing Advisor (`dataset_profiler`)
+When given a dataset directory (up to 2,000 files / 5 GB on disk), AuralQ runs an out-of-core streaming acoustic audit:
+- **Sub-100 MB RAM Budget**: Files are processed sequentially using online Welford accumulation ($O(1)$ space for mean and sample variance). No full-corpus waveform loading occurs.
+- **Two-Tier Audit**:
+  - *Tier 1 (Fast Header Scan)*: Gathers sample rate distributions, channel layouts, and duration percentiles at ~1000 files/sec.
+  - *Tier 2 (Acoustic Hygiene Pass)*: Measures RMS dynamic range spread, clipping ratios, silence count, spectral centroid, and spectral flatness.
+- **Deterministic Preprocessing Recommendations**: Evaluates mathematical rule thresholds to recommend grounded actions:
+  - `RESAMPLE`: Triggered when sample rates diverge across files.
+  - `MONO_DOWNMIX`: Triggered when stereo/multi-channel files are present.
+  - `CHUNKING_OR_PADDING`: Triggered when duration disparity $(\max - \min)/\text{median} > 0.5$.
+  - `LOUDNESS_NORMALIZATION`: Triggered when loudness standard deviation $> 6.0\text{ dB}$.
+  - `HIGH_PASS_FILTER`: Triggered when low-frequency rumble dominates (< 800 Hz centroid).
+  - `PRUNE_SILENCE` & `PRUNE_OR_DECLIP`: Flags unreadable, silent, or severely clipped recordings with exact paths.
 
 ---
 
@@ -156,6 +172,11 @@ tests/test_audio.py::test_validate_duration PASSED
 tests/test_audio.py::test_validate_format PASSED
 tests/test_audio.py::test_load_audio_file_silence_abstention PASSED
 tests/test_audio.py::test_load_audio_file_clipped_warning_injection PASSED
+tests/test_dataset_profiler.py::test_dual_mode_loader_distinction PASSED
+tests/test_dataset_profiler.py::test_streaming_dataset_profiler_metrics PASSED
+tests/test_dataset_profiler.py::test_deterministic_preprocessing_advisor PASSED
+tests/test_dataset_profiler.py::test_registry_dataset_profiler_dispatch PASSED
+tests/test_dataset_profiler.py::test_empty_dataset_handling PASSED
 tests/test_tools.py::test_rms_energy_sine_analytical PASSED
 tests/test_tools.py::test_zero_crossing_rate PASSED
 tests/test_tools.py::test_spectral_centroid_analytical PASSED
@@ -166,7 +187,7 @@ tests/test_tools.py::test_spectrogram_headless PASSED
 tests/test_tools.py::test_insufficient_samples_guard PASSED
 tests/test_tools.py::test_tool_registry_and_dispatcher PASSED
 
-======================= 16 passed in ~3s =======================
+======================= 21 passed in ~5s =======================
 ```
 
 ---

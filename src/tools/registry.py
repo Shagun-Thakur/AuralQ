@@ -4,9 +4,11 @@ from typing import Any, Callable, Dict, List, Optional, Type
 import numpy as np
 from pydantic import BaseModel, ValidationError
 
+from src.tools.dataset_advisor import dataset_profiler_tool
 from src.tools.energy import rms_energy
 from src.tools.schemas import (
     BaseToolArgs,
+    DatasetProfileArgs,
     MFCCArgs,
     RMSEnergyArgs,
     SpectralBandwidthArgs,
@@ -94,6 +96,13 @@ TOOL_CATALOGUE: Dict[str, Dict[str, Any]] = {
         "description": "Compute STFT time-frequency magnitude summaries and optional plot generation.",
         "intent_keywords": ["spectrogram", "visualize", "time-frequency", "plot", "display frequencies"],
     },
+    "dataset_profiler": {
+        "func": dataset_profiler_tool,
+        "args_class": DatasetProfileArgs,
+        "category": "dataset",
+        "description": "Stream-audit an audio dataset folder, profiling acoustic distributions and generating deterministic preprocessing advice.",
+        "intent_keywords": ["dataset", "folder", "batch", "profile", "preprocess", "preprocessing", "audit", "recommendation", "clean"],
+    },
 }
 
 
@@ -123,12 +132,12 @@ def list_tools_catalogue() -> List[Dict[str, Any]]:
 
 def execute_tool(
     name: str,
-    waveform: np.ndarray,
-    sr: int,
+    waveform: Optional[np.ndarray] = None,
+    sr: Optional[int] = None,
     args: Optional[Dict[str, Any]] = None,
 ) -> ToolResultModel:
     """
-    Execute a registered DSP tool against a waveform with strict argument validation.
+    Execute a registered DSP tool against a waveform or dataset with strict argument validation.
     Never raises unhandled exceptions.
     """
     if name not in TOOL_CATALOGUE:
@@ -164,6 +173,26 @@ def execute_tool(
 
     # 2. Execute deterministic function
     try:
+        if name == "dataset_profiler":
+            # Dataset profiler operates on filesystem path, not a preloaded waveform
+            return func(
+                dataset_path=validated_args.dataset_path,
+                target_sr=validated_args.target_sr or 22050,
+                max_files=validated_args.max_files,
+            )
+
+        if waveform is None or sr is None:
+            return ToolResultModel(
+                tool=name,
+                status="dsp_error",
+                parameters=validated_args.model_dump(),
+                result={},
+                perceptual_anchors={},
+                citation_aliases={},
+                execution_time_ms=0.0,
+                warnings=[f"Tool '{name}' requires an ingested waveform and sample rate."],
+            )
+
         return func(waveform=waveform, sr=sr, args=validated_args)
     except Exception as e:
         return ToolResultModel(
