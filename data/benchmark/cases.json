@@ -1,35 +1,142 @@
 [
   {
     "case_id": "BC_001",
-    "audio_type": "synthetic_sine_1000hz",
     "question": "Is this audio recording noise-like or does it have tonal structure?",
     "intent": "tonal_vs_noise_classification",
     "expected_tools": ["spectral_flatness"],
-    "reference_evidence": {
-      "mean_flatness_max": 0.05
-    },
-    "expected_grounded_term": "tonal"
+    "is_abstention": false
   },
   {
     "case_id": "BC_002",
-    "audio_type": "synthetic_white_noise",
     "question": "Does this recording sound bright or dull?",
     "intent": "brightness_estimation",
     "expected_tools": ["spectral_centroid"],
-    "reference_evidence": {
-      "mean_hz_min": 4500.0
-    },
-    "expected_grounded_term": "bright"
+    "is_abstention": false
   },
   {
     "case_id": "BC_003",
-    "audio_type": "synthetic_sine_1000hz",
-    "question": "Is this audio consistently loud or fluctuating?",
+    "question": "Is this audio consistently loud or fluctuating in amplitude?",
     "intent": "loudness_stability",
     "expected_tools": ["rms_energy"],
-    "reference_evidence": {
-      "dynamic_range_cv_max": 0.1
-    },
-    "expected_grounded_term": "consistent"
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_004",
+    "question": "Is the frequency content of this audio spread out wide or narrow across the spectrum?",
+    "intent": "spectral_spread_estimation",
+    "expected_tools": ["spectral_bandwidth"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_005",
+    "question": "Where is the high frequency energy concentrated and what is the rolloff cutoff?",
+    "intent": "spectral_energy_concentration",
+    "expected_tools": ["spectral_rolloff"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_006",
+    "question": "Is this audio smooth and continuous, or does it have rapid transient sign changes and percussiveness?",
+    "intent": "transient_and_percussiveness_analysis",
+    "expected_tools": ["zero_crossing_rate"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_007",
+    "question": "What is the timbral texture and spectral envelope of this instrument sound?",
+    "intent": "timbral_texture_analysis",
+    "expected_tools": ["mfcc"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_008",
+    "question": "Can you generate a spectrogram visual plot showing time-frequency energy distribution?",
+    "intent": "spectrogram_visualization",
+    "expected_tools": ["spectrogram"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_009",
+    "question": "Does this sound bright and is it consistently loud throughout?",
+    "intent": "multi_tool_brightness_loudness",
+    "expected_tools": ["spectral_centroid", "rms_energy"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_010",
+    "question": "Tell me if this audio has strong tonal harmonics and whether it contains percussive transients.",
+    "intent": "multi_tool_tonality_and_transients",
+    "expected_tools": ["spectral_flatness", "zero_crossing_rate"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_011",
+    "question": "What is the spectral center frequency and what is the bandwidth spread around it?",
+    "intent": "multi_tool_center_and_spread",
+    "expected_tools": ["spectral_centroid", "spectral_bandwidth"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_012",
+    "question": "Please audit my audio dataset directory and recommend what preprocessing pipeline I should apply.",
+    "intent": "dataset_profiling_and_advice",
+    "expected_tools": ["dataset_profiler"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_013",
+    "question": "Check my dataset folder for any silent or clipped audio files that should be cleaned.",
+    "intent": "dataset_anomaly_audit",
+    "expected_tools": ["dataset_profiler"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_014",
+    "question": "What is the cutoff frequency below which 85% of total audio energy is concentrated?",
+    "intent": "rolloff_frequency_determination",
+    "expected_tools": ["spectral_rolloff"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_015",
+    "question": "Measure the volume level, dynamic range, and overall amplitude consistency of this clip.",
+    "intent": "dynamic_range_evaluation",
+    "expected_tools": ["rms_energy"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_016",
+    "question": "Does this recording sound like white noise hiss or pure musical tones?",
+    "intent": "hiss_vs_tone_distinction",
+    "expected_tools": ["spectral_flatness"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_017",
+    "question": "Extract the mel cepstral coefficients to analyze how timbre evolves over time.",
+    "intent": "mfcc_timbral_feature_extraction",
+    "expected_tools": ["mfcc"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_018",
+    "question": "Tell me if this sound is dull, quiet in amplitude, and smooth without transients.",
+    "intent": "three_tool_triplet_analysis",
+    "expected_tools": ["spectral_centroid", "rms_energy", "zero_crossing_rate"],
+    "is_abstention": false
+  },
+  {
+    "case_id": "BC_019",
+    "question": "What is the capital city of France?",
+    "intent": "out_of_scope_geography_trivia",
+    "expected_tools": [],
+    "is_abstention": true
+  },
+  {
+    "case_id": "BC_020",
+    "question": "Can you diagnose what respiratory illness this coughing audio indicates?",
+    "intent": "out_of_scope_medical_diagnosis",
+    "expected_tools": [],
+    "is_abstention": true
   }
 ]

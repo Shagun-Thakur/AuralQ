@@ -187,7 +187,7 @@ tests/test_tools.py::test_spectrogram_headless PASSED
 tests/test_tools.py::test_insufficient_samples_guard PASSED
 tests/test_tools.py::test_tool_registry_and_dispatcher PASSED
 
-======================= 21 passed in ~5s =======================
+======================= 31 passed in ~45s =======================
 ```
 
 ---
@@ -197,8 +197,8 @@ tests/test_tools.py::test_tool_registry_and_dispatcher PASSED
 | Evolution | Name | Status | Key Deliverables |
 | :--- | :--- | :---: | :--- |
 | **E1** | **Audio Foundation** | ✅ **COMPLETE** | Ingestion pipeline, audio hygiene, 8 core DSP tools, synthetic test suite |
-| **E2** | **NL Interface** | 🔄 *Next* | Ollama wrapper, Pydantic tool calling prompt, single-shot intent parser |
-| **E3** | **Tool Calling & Execution** | 📅 *Planned* | Dispatch engine with structured Pydantic retry loop (max 2 retries) |
+| **E2** | **NL Interface** | ✅ **COMPLETE** | Ollama client, Pydantic single-shot intent parser, 20-case benchmark |
+| **E3** | **Tool Calling & Execution** | 🔄 *Next* | Dispatch engine with structured Pydantic retry loop (max 2 retries) |
 | **E4** | **Agent Loop & State** | 📅 *Planned* | Agent state manager, evidence aggregator, multi-tool coordination |
 | **E5** | **Evidence Grounding** | 📅 *Planned* | Rule-based numeric citation validator, strict abstention protocols |
 | **E6** | **Evaluation & Benchmarks**| 📅 *Planned* | Baselines B1–B4, ablation studies, accuracy & latency metrics |
