@@ -18,6 +18,18 @@ class AudioMetadata(BaseModel):
     clipping_ratio: float = 0.0
     warnings: List[str] = Field(default_factory=list)
 
+    def to_context_dict(self) -> dict:
+        """Convert metadata to compact dictionary for prompt context injection."""
+        return {
+            "duration_sec": self.duration_sec,
+            "sample_rate": self.sample_rate,
+            "num_channels": self.num_channels,
+            "rms_dbfs": self.rms_dbfs,
+            "is_clipped": self.is_clipped,
+            "clipping_ratio": round(self.clipping_ratio, 4),
+            "warnings": "; ".join(self.warnings) if self.warnings else "none",
+        }
+
 
 class ValidationResult(BaseModel):
     """Structured response for audio validation checks."""

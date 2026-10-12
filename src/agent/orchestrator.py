@@ -1,0 +1,307 @@
+"""Layer 4: AuralQ Agent Orchestration Loop and Session Coordinator."""
+
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+from src.agent.executor import ToolExecutor
+from src.agent.schemas import AgentResponse, EvidencePackage, TurnRecord
+from src.agent.state import SessionState
+from src.agent.synthesizer import ResponseSynthesizer
+from src.audio.loader import AudioLoadResult, load_audio_file
+from src.audio.validation import AudioMetadata
+from src.llm.client import OllamaClient
+from src.tools.schemas import ToolResultModel
+
+
+class AuralQAgent:
+    """
+    Top-level orchestrator for AuralQ.
+    Coordinates audio ingestion, intent parsing, deterministic tool execution,
+    tool result caching, multi-turn state, and grounded natural-language synthesis.
+    """
+
+    def __init__(
+        self,
+        client: Optional[OllamaClient] = None,
+        executor: Optional[ToolExecutor] = None,
+        synthesizer: Optional[ResponseSynthesizer] = None,
+        session_state: Optional[SessionState] = None,
+    ):
+        self.client = client or OllamaClient()
+        self.executor = executor or ToolExecutor(client=self.client)
+        self.synthesizer = synthesizer or ResponseSynthesizer(client=self.client)
+        self.session_state = session_state or SessionState()
+
+    def load_audio(self, file_path_or_data: Union[str, Path, Any]) -> AudioLoadResult:
+        """
+        Ingest and validate an untrusted audio file through Layer 1 hygiene pipeline.
+        Blocks DC bias, gates silence, inspects clipping, and resets the tool cache.
+        """
+        load_res = load_audio_file(file_path_or_data)
+        if load_res.status == "SUCCESS" and load_res.metadata is not None:
+            self.session_state.set_audio(
+                metadata=load_res.metadata,
+                waveform=load_res.waveform,
+                sr=load_res.sample_rate,
+            )
+        return load_res
+
+    def load_dataset(self, dataset_path: Union[str, Path]) -> str:
+        """
+        Validate and register an audio dataset directory for profiling.
+        """
+        path = Path(dataset_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Dataset path does not exist: {path}")
+        if not path.is_dir():
+            raise NotADirectoryError(f"Dataset path must be a directory: {path}")
+
+        resolved_str = str(path.resolve())
+        self.session_state.set_dataset(resolved_str)
+        return resolved_str
+
+    def query(
+        self,
+        question: str,
+        audio_path: Optional[Union[str, Path]] = None,
+        dataset_path: Optional[Union[str, Path]] = None,
+    ) -> AgentResponse:
+        """
+        Execute a complete end-to-end conversational turn.
+        1. Resolve active inputs (audio/dataset).
+        2. Parse intent via Layer 2 LLM.
+        3. Dispatch deterministic DSP tools with cache reuse.
+        4. Synthesize natural-language answer grounded in evidence.
+        5. Record turn in session history.
+        """
+        t_total_start = time.perf_counter()
+
+        # Step 1: Handle input overrides if passed
+        if audio_path:
+            load_res = self.load_audio(audio_path)
+            if load_res.status != "SUCCESS":
+                evidence = EvidencePackage(
+                    query=question,
+                    status="ABSTAIN" if load_res.status == "ABSTAIN" else "TOOL_FAILURE",
+                    abstention_reason=load_res.message,
+                    warnings=[load_res.message],
+                )
+                turn = TurnRecord(
+                    turn_id=len(self.session_state.turns) + 1,
+                    timestamp=time.time(),
+                    query=question,
+                    evidence=evidence,
+                    response_text=f"Audio ingestion status ({load_res.status}): {load_res.message}",
+                    latency_breakdown={"total_ms": round((time.perf_counter() - t_total_start) * 1000, 2)},
+                )
+                self.session_state.add_turn(turn)
+                return AgentResponse(
+                    query=question,
+                    response_text=turn.response_text,
+                    status="abstained" if load_res.status == "ABSTAIN" else "dsp_error",
+                    evidence=evidence,
+                    turn_record=turn,
+                    latency_breakdown=turn.latency_breakdown,
+                )
+
+        if dataset_path:
+            self.load_dataset(dataset_path)
+
+        # Step 2: Intent Parsing via Layer 2 LLM
+        meta_dict = None
+        if self.session_state.audio_metadata:
+            meta_dict = self.session_state.audio_metadata.to_context_dict()
+
+        t_intent_start = time.perf_counter()
+        llm_res = self.client.parse_intent(question, audio_metadata=meta_dict)
+        intent_ms = round((time.perf_counter() - t_intent_start) * 1000, 2)
+
+        if not llm_res.is_valid or llm_res.parsed_intent is None:
+            err_msg = llm_res.error_message or "Unknown LLM intent parsing error"
+            evidence = EvidencePackage(
+                query=question,
+                status="TOOL_FAILURE",
+                warnings=[err_msg],
+            )
+            turn = TurnRecord(
+                turn_id=len(self.session_state.turns) + 1,
+                timestamp=time.time(),
+                query=question,
+                evidence=evidence,
+                response_text=f"I was unable to interpret the acoustic intent for this query: {err_msg}",
+                latency_breakdown={"intent_ms": intent_ms, "total_ms": round((time.perf_counter() - t_total_start) * 1000, 2)},
+            )
+            self.session_state.add_turn(turn)
+            return AgentResponse(
+                query=question,
+                response_text=turn.response_text,
+                status=llm_res.status,  # "connection_error" or "schema_error"
+                evidence=evidence,
+                turn_record=turn,
+                latency_breakdown=turn.latency_breakdown,
+            )
+
+        intent = llm_res.parsed_intent
+
+        # Step 3: Fast-path for Abstention
+        if intent.is_abstention:
+            evidence = EvidencePackage(
+                query=question,
+                status="ABSTAIN",
+                abstention_reason=intent.abstention_reason,
+            )
+            resp_text, synth_ms = self.synthesizer.synthesize(question, evidence)
+            total_ms = round((time.perf_counter() - t_total_start) * 1000, 2)
+            latencies = {
+                "intent_ms": intent_ms,
+                "dsp_ms": 0.0,
+                "synthesis_ms": synth_ms,
+                "total_ms": total_ms,
+            }
+            turn = TurnRecord(
+                turn_id=len(self.session_state.turns) + 1,
+                timestamp=time.time(),
+                query=question,
+                parsed_intent=intent,
+                evidence=evidence,
+                response_text=resp_text,
+                latency_breakdown=latencies,
+            )
+            self.session_state.add_turn(turn)
+            return AgentResponse(
+                query=question,
+                response_text=resp_text,
+                status="abstained",
+                evidence=evidence,
+                turn_record=turn,
+                latency_breakdown=latencies,
+            )
+
+        # Step 4: Tool Execution with Cache Interception
+        t_dsp_start = time.perf_counter()
+        tools_called: List[str] = []
+        tool_results: List[ToolResultModel] = []
+        cached_tools_used: List[str] = []
+        warnings: List[str] = []
+
+        if self.session_state.audio_metadata and self.session_state.audio_metadata.warnings:
+            warnings.extend(self.session_state.audio_metadata.warnings)
+
+        for tc in intent.selected_tools:
+            tool_name = tc.tool_name
+            tools_called.append(tool_name)
+            args_dict = dict(tc.parameters)
+
+            # Route dataset_profiler parameter
+            if tool_name == "dataset_profiler":
+                if self.session_state.dataset_path:
+                    args_dict["dataset_path"] = self.session_state.dataset_path
+                elif not args_dict.get("dataset_path") or not Path(str(args_dict["dataset_path"])).exists():
+                    if self.session_state.audio_metadata and Path(self.session_state.audio_metadata.file_path).is_dir():
+                        args_dict["dataset_path"] = self.session_state.audio_metadata.file_path
+
+            # Check cache
+            cached_res = self.session_state.get_cached_tool_result(tool_name, args_dict)
+            if cached_res is not None:
+                cached_tools_used.append(tool_name)
+                tool_results.append(cached_res)
+                if cached_res.warnings:
+                    warnings.extend(cached_res.warnings)
+            else:
+                # Execute tool via ToolExecutor
+                fresh_res = self.executor.execute_tool(
+                    tool_name=tool_name,
+                    waveform=self.session_state.waveform,
+                    sr=self.session_state.sr,
+                    parameters=args_dict,
+                )
+                tool_results.append(fresh_res)
+                if fresh_res.warnings:
+                    warnings.extend(fresh_res.warnings)
+
+                # Store in session tool cache if successful
+                if fresh_res.status == "success":
+                    self.session_state.cache_tool_result(tool_name, args_dict, fresh_res)
+
+        # If all dispatched tools were resolved from cache, DSP compute time is 0.0 ms
+        if cached_tools_used and len(cached_tools_used) == len(intent.selected_tools):
+            dsp_ms = 0.0
+        else:
+            dsp_ms = round((time.perf_counter() - t_dsp_start) * 1000, 2)
+
+        # Step 5: Consolidate Metrics, Anchors, and Citations into EvidencePackage
+        consolidated_metrics: Dict[str, Any] = {}
+        consolidated_anchors: Dict[str, str] = {}
+        all_citation_aliases: Dict[str, List[str]] = {}
+
+        has_failures = any(r.status != "success" for r in tool_results)
+        all_failed = all(r.status != "success" for r in tool_results) if tool_results else True
+
+        if not tool_results or all_failed:
+            overall_status = "TOOL_FAILURE"
+        elif has_failures:
+            overall_status = "PARTIAL"
+        else:
+            overall_status = "SUCCESS"
+
+        for r in tool_results:
+            if r.status == "success":
+                for k, v in r.result.items():
+                    consolidated_metrics[f"{r.tool}.{k}"] = v
+                for k, v in r.perceptual_anchors.items():
+                    consolidated_anchors[f"{r.tool}.{k}"] = v
+                for k, aliases in r.citation_aliases.items():
+                    all_citation_aliases[f"{r.tool}.{k}"] = aliases
+
+        evidence = EvidencePackage(
+            query=question,
+            audio_id=self.session_state.audio_id,
+            audio_metadata=self.session_state.audio_metadata,
+            status=overall_status,
+            tools_called=tools_called,
+            tool_results=tool_results,
+            consolidated_metrics=consolidated_metrics,
+            consolidated_anchors=consolidated_anchors,
+            all_citation_aliases=all_citation_aliases,
+            total_dsp_latency_ms=dsp_ms,
+            warnings=list(dict.fromkeys(warnings)),
+        )
+
+        # Step 6: Response Synthesis
+        history_ctx = self.session_state.get_recent_history_context(max_turns=3)
+        resp_text, synth_ms = self.synthesizer.synthesize(
+            query=question,
+            evidence=evidence,
+            history_context=history_ctx,
+        )
+
+        total_ms = round((time.perf_counter() - t_total_start) * 1000, 2)
+        latencies = {
+            "intent_ms": intent_ms,
+            "dsp_ms": dsp_ms,
+            "synthesis_ms": synth_ms,
+            "total_ms": total_ms,
+        }
+
+        turn = TurnRecord(
+            turn_id=len(self.session_state.turns) + 1,
+            timestamp=time.time(),
+            query=question,
+            parsed_intent=intent,
+            evidence=evidence,
+            response_text=resp_text,
+            latency_breakdown=latencies,
+            cached_tools_used=cached_tools_used,
+        )
+        self.session_state.add_turn(turn)
+
+        return AgentResponse(
+            query=question,
+            response_text=resp_text,
+            status="success" if overall_status in ["SUCCESS", "PARTIAL"] else "dsp_error",
+            evidence=evidence,
+            turn_record=turn,
+            latency_breakdown=latencies,
+            cached_tools_used=cached_tools_used,
+        )

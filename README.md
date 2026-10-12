@@ -167,6 +167,18 @@ Expected output:
 ```text
 tests/test_audio.py::test_dc_block_removes_bias PASSED
 tests/test_audio.py::test_silence_detection PASSED
+tests/test_agent.py::test_session_state_tool_caching_invariant_keys PASSED
+tests/test_agent.py::test_session_state_cache_invalidation_on_audio_change PASSED
+tests/test_agent.py::test_session_state_history_context PASSED
+tests/test_agent.py::test_synthesizer_abstention_fast_path PASSED
+tests/test_agent.py::test_synthesizer_deterministic_fallback PASSED
+tests/test_agent.py::test_agent_query_with_mocked_llm_and_cache_hit PASSED
+tests/test_agent.py::test_agent_abstention_flow PASSED
+tests/test_agent.py::test_agent_dataset_profiler_flow PASSED
+tests/test_agent.py::test_agent_ingestion_warning_propagation PASSED
+tests/test_agent.py::test_live_ollama_agent_multiturn PASSED
+tests/test_audio.py::test_dc_block_removes_bias PASSED
+tests/test_audio.py::test_silence_detection PASSED
 tests/test_audio.py::test_consecutive_clipping_detection PASSED
 tests/test_audio.py::test_validate_duration PASSED
 tests/test_audio.py::test_validate_format PASSED
@@ -203,7 +215,7 @@ tests/test_tools.py::test_spectrogram_headless PASSED
 tests/test_tools.py::test_insufficient_samples_guard PASSED
 tests/test_tools.py::test_tool_registry_and_dispatcher PASSED
 
-======================= 37 passed in ~22s =======================
+======================= 47 passed in ~32s =======================
 ```
 
 ---
@@ -215,8 +227,8 @@ tests/test_tools.py::test_tool_registry_and_dispatcher PASSED
 | **E1** | **Audio Foundation** | ✅ **COMPLETE** | Ingestion pipeline, audio hygiene, 8 core DSP tools, synthetic test suite |
 | **E2** | **NL Interface** | ✅ **COMPLETE** | Ollama client, Pydantic single-shot intent parser, 20-case benchmark |
 | **E3** | **Tool Calling & Execution** | ✅ **COMPLETE** | Tool executor, argument correction retry loop, evidence packaging, 100% benchmark |
-| **E4** | **Agent Loop & State** | 🔄 *Next* | Agent state manager, evidence aggregator, multi-turn coordination |
-| **E5** | **Evidence Grounding** | 📅 *Planned* | Rule-based numeric citation validator, strict abstention protocols |
+| **E4** | **Agent Loop & State** | ✅ **COMPLETE** | Agent orchestrator (`AuralQAgent`), session state, tool caching, response synthesizer |
+| **E5** | **Evidence Grounding** | 🔄 *Next* | Rule-based numeric citation validator, strict hallucination audit |
 | **E6** | **Evaluation & Benchmarks**| 📅 *Planned* | Baselines B1–B4, ablation studies, accuracy & latency metrics |
 | **E7** | **Interactive Application** | 📅 *Planned* | Streamlit cockpit interface with tool trace visualizer & audio playback |
 

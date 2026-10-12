@@ -59,18 +59,24 @@ class OllamaClient:
         self.timeout_sec = timeout_sec
         self.max_retries = max_retries
 
-    def _call_ollama_raw(self, prompt: str, system: Optional[str] = None) -> Dict[str, Any]:
+    def _call_ollama_raw(
+        self,
+        prompt: str,
+        system: Optional[str] = None,
+        format: Optional[str] = "json",
+    ) -> Dict[str, Any]:
         """Execute raw HTTP POST request to Ollama with hardlocked GPU context options."""
         payload = {
             "model": self.model_name,
             "prompt": prompt,
-            "format": "json",
             "stream": False,
             "options": {
                 "num_ctx": self.num_ctx,
                 "temperature": self.temperature,
             },
         }
+        if format is not None:
+            payload["format"] = format
         if system:
             payload["system"] = system
 
@@ -81,6 +87,17 @@ class OllamaClient:
         )
         response.raise_for_status()
         return response.json()
+
+    def generate_text(
+        self,
+        prompt: str,
+        system: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Execute freeform natural-language text generation request to Ollama without JSON constraint.
+        Used for Layer 4 grounded response synthesis.
+        """
+        return self._call_ollama_raw(prompt=prompt, system=system, format=None)
 
     def parse_intent(
         self,

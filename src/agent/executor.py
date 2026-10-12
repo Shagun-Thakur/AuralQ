@@ -29,9 +29,10 @@ class ToolExecutor:
     def __init__(
         self,
         ollama_client: Optional[OllamaClient] = None,
+        client: Optional[OllamaClient] = None,
         max_retries: int = 2,
     ):
-        self.client = ollama_client or OllamaClient()
+        self.client = client or ollama_client or OllamaClient()
         self.max_retries = max_retries
 
     def _attempt_argument_correction(
@@ -63,6 +64,41 @@ class ToolExecutor:
         except Exception:
             pass
         return invalid_args
+
+    def execute_tool(
+        self,
+        tool_name: str,
+        waveform: Optional[np.ndarray] = None,
+        sr: Optional[int] = 22050,
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> ToolResultModel:
+        """
+        Validate parameters against Pydantic schema (with retry correction) and execute tool deterministically.
+        """
+        args_dict = dict(parameters or {})
+        tool_entry = TOOL_CATALOGUE.get(tool_name)
+        if tool_entry:
+            args_class = tool_entry["args_class"]
+            for attempt in range(self.max_retries + 1):
+                try:
+                    args_class(**args_dict)
+                    break
+                except ValidationError as ve:
+                    if attempt < self.max_retries:
+                        args_dict = self._attempt_argument_correction(
+                            tool_name=tool_name,
+                            invalid_args=args_dict,
+                            validation_error=str(ve),
+                        )
+                    else:
+                        break
+
+        return execute_tool(
+            name=tool_name,
+            waveform=waveform,
+            sr=sr or 22050,
+            args=args_dict,
+        )
 
     def execute_intent(
         self,

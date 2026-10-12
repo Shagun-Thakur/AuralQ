@@ -1,10 +1,11 @@
-"""Pydantic v2 schemas for Layer 4: Evidence Packaging and Tool Execution State."""
+"""Pydantic v2 schemas for Layer 4: Evidence Packaging, Turn History, and Agent State."""
 
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from src.audio.validation import AudioMetadata
 from src.tools.schemas import ToolResultModel
+from src.llm.schemas import IntentParseResult
 
 
 class EvidencePackage(BaseModel):
@@ -62,3 +63,46 @@ class EvidencePackage(BaseModel):
         lines.append("</evidence>")
         return "\n".join(lines)
 
+
+class TurnRecord(BaseModel):
+    """Encapsulates a single completed conversational turn in an agent session."""
+    turn_id: int = Field(description="Sequential 1-based index of this turn.")
+    timestamp: float = Field(description="Unix timestamp when this turn was completed.")
+    query: str = Field(description="User natural-language query.")
+    parsed_intent: Optional[IntentParseResult] = Field(default=None, description="Layer 2 intent parsing output.")
+    evidence: EvidencePackage = Field(description="Structured evidence package produced for this turn.")
+    response_text: str = Field(description="Final synthesized, grounded response delivered to user.")
+    latency_breakdown: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Timing breakdown in milliseconds (intent_ms, dsp_ms, synthesis_ms, total_ms).",
+    )
+    cached_tools_used: List[str] = Field(
+        default_factory=list,
+        description="Names of tools whose results were retrieved from session cache without DSP re-computation.",
+    )
+
+
+class AgentResponse(BaseModel):
+    """User-facing output of a single agent query turn."""
+    query: str = Field(description="User query.")
+    response_text: str = Field(description="Grounded natural-language answer.")
+    status: Literal["success", "abstained", "dsp_error", "schema_error", "connection_error"] = "success"
+    evidence: EvidencePackage = Field(description="The underlying evidence package.")
+    turn_record: TurnRecord = Field(description="Complete record of this turn for history.")
+    latency_breakdown: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Latency metrics for this turn (ms).",
+    )
+    cached_tools_used: List[str] = Field(
+        default_factory=list,
+        description="Tools resolved from cache.",
+    )
+
+
+class SessionSummary(BaseModel):
+    """Metadata summary of an ongoing AuralQ agent session."""
+    session_id: str
+    turn_count: int
+    active_audio_path: Optional[str] = None
+    active_dataset_path: Optional[str] = None
+    cached_tools: List[str] = Field(default_factory=list)
