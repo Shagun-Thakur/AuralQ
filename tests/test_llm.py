@@ -125,7 +125,7 @@ def is_ollama_reachable() -> bool:
     """Helper to check if local Ollama server is alive."""
     import requests
     try:
-        r = requests.get("http://localhost:11434/api/tags", timeout=1.5)
+        r = requests.get("http://127.0.0.1:11434/api/tags", timeout=3.0)
         return r.status_code == 200
     except Exception:
         return False

@@ -80,7 +80,7 @@ TOOL_CATALOGUE: Dict[str, Dict[str, Any]] = {
         "args_class": SpectralFlatnessArgs,
         "category": "spectral",
         "description": "Compute spectral flatness (ratio of geometric to arithmetic mean), measuring tonality vs noise.",
-        "intent_keywords": ["tonal", "noise", "hiss", "harmonic", "pure tone", "noise-like"],
+        "intent_keywords": ["tonal", "noise", "hiss", "harmonic", "pure tone", "noise-like", "white noise", "musical tones", "tonality"],
     },
     "mfcc": {
         "func": mfcc,

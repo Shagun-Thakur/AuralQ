@@ -177,6 +177,22 @@ tests/test_dataset_profiler.py::test_streaming_dataset_profiler_metrics PASSED
 tests/test_dataset_profiler.py::test_deterministic_preprocessing_advisor PASSED
 tests/test_dataset_profiler.py::test_registry_dataset_profiler_dispatch PASSED
 tests/test_dataset_profiler.py::test_empty_dataset_handling PASSED
+tests/test_executor.py::test_executor_single_tool PASSED
+tests/test_executor.py::test_executor_multi_tool PASSED
+tests/test_executor.py::test_executor_dataset_profiler_routing PASSED
+tests/test_executor.py::test_executor_abstention_passthrough PASSED
+tests/test_executor.py::test_executor_warning_propagation PASSED
+tests/test_executor.py::test_live_e2e_pipeline PASSED
+tests/test_llm.py::test_clean_json_text PASSED
+tests/test_llm.py::test_intent_schema_valid PASSED
+tests/test_llm.py::test_intent_schema_invalid_tool_name PASSED
+tests/test_llm.py::test_intent_schema_max_tool_budget PASSED
+tests/test_llm.py::test_prompt_construction_contains_all_tools PASSED
+tests/test_llm.py::test_client_self_healing_retry PASSED
+tests/test_llm.py::test_client_connection_error_graceful_handling PASSED
+tests/test_llm.py::test_live_ollama_single_tool_dispatch PASSED
+tests/test_llm.py::test_live_ollama_abstention PASSED
+tests/test_llm.py::test_live_ollama_dataset_intent PASSED
 tests/test_tools.py::test_rms_energy_sine_analytical PASSED
 tests/test_tools.py::test_zero_crossing_rate PASSED
 tests/test_tools.py::test_spectral_centroid_analytical PASSED
@@ -187,7 +203,7 @@ tests/test_tools.py::test_spectrogram_headless PASSED
 tests/test_tools.py::test_insufficient_samples_guard PASSED
 tests/test_tools.py::test_tool_registry_and_dispatcher PASSED
 
-======================= 31 passed in ~45s =======================
+======================= 37 passed in ~22s =======================
 ```
 
 ---
@@ -198,8 +214,8 @@ tests/test_tools.py::test_tool_registry_and_dispatcher PASSED
 | :--- | :--- | :---: | :--- |
 | **E1** | **Audio Foundation** | ✅ **COMPLETE** | Ingestion pipeline, audio hygiene, 8 core DSP tools, synthetic test suite |
 | **E2** | **NL Interface** | ✅ **COMPLETE** | Ollama client, Pydantic single-shot intent parser, 20-case benchmark |
-| **E3** | **Tool Calling & Execution** | 🔄 *Next* | Dispatch engine with structured Pydantic retry loop (max 2 retries) |
-| **E4** | **Agent Loop & State** | 📅 *Planned* | Agent state manager, evidence aggregator, multi-tool coordination |
+| **E3** | **Tool Calling & Execution** | ✅ **COMPLETE** | Tool executor, argument correction retry loop, evidence packaging, 100% benchmark |
+| **E4** | **Agent Loop & State** | 🔄 *Next* | Agent state manager, evidence aggregator, multi-turn coordination |
 | **E5** | **Evidence Grounding** | 📅 *Planned* | Rule-based numeric citation validator, strict abstention protocols |
 | **E6** | **Evaluation & Benchmarks**| 📅 *Planned* | Baselines B1–B4, ablation studies, accuracy & latency metrics |
 | **E7** | **Interactive Application** | 📅 *Planned* | Streamlit cockpit interface with tool trace visualizer & audio playback |

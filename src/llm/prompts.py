@@ -40,6 +40,7 @@ CRITICAL ARCHITECTURAL RULES:
 4. If a question asks about multiple properties (e.g. loudness AND brightness), include all required tools (up to 3).
 5. If the query asks about a dataset folder or preprocessing recommendations, select the `dataset_profiler` tool.
 6. If the question cannot be answered by acoustic signal processing (e.g. asking for singer identity, song lyrics, medical diagnosis, or general trivia unrelated to audio physics), set "is_abstention": true and provide a clear "abstention_reason".
+   IMPORTANT: Qualitative acoustic questions (such as whether sound is white noise hiss vs pure musical tones, bright vs dull, smooth vs percussive, loud vs quiet) ARE acoustic signal processing questions and MUST map to registered tools (`spectral_flatness`, `spectral_centroid`, `zero_crossing_rate`, `rms_energy`). Do NOT abstain on acoustic characteristics.
 7. You must respond in STRICT VALID JSON format conforming to the schema below. No conversational prose outside the JSON.
 
 OUTPUT JSON SCHEMA:
