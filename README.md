@@ -222,8 +222,15 @@ tests/test_validator.py::test_validator_abstention_and_qualitative_passes PASSED
 tests/test_validator.py::test_validator_deterministic_repair PASSED
 tests/test_validator.py::test_agent_with_hallucinated_response_triggers_repair PASSED
 tests/test_validator.py::test_agent_with_grounded_response_passes_unmodified PASSED
+tests/test_evaluation.py::test_compute_baseline_summary_statistics PASSED
+tests/test_evaluation.py::test_benchmark_comparison_report_markdown_generation PASSED
+tests/test_evaluation.py::test_run_baseline_b1_oracle PASSED
+tests/test_evaluation.py::test_run_baseline_b1_abstention PASSED
+tests/test_evaluation.py::test_run_baseline_b2_llm_only_catches_hallucination PASSED
+tests/test_evaluation.py::test_run_baseline_b3_fixed_pipeline_runs_all_tools PASSED
+tests/test_evaluation.py::test_run_baseline_b4_auralq_dynamic PASSED
 
-======================= 56 passed in ~31s =======================
+======================= 63 passed in ~32s =======================
 ```
 
 ---
@@ -237,19 +244,94 @@ tests/test_validator.py::test_agent_with_grounded_response_passes_unmodified PAS
 | **E3** | **Tool Calling & Execution** | ✅ **COMPLETE** | Tool executor, argument correction retry loop, evidence packaging, 100% benchmark |
 | **E4** | **Agent Loop & State** | ✅ **COMPLETE** | Agent orchestrator (`AuralQAgent`), session state, tool caching, response synthesizer |
 | **E5** | **Evidence Grounding** | ✅ **COMPLETE** | Rule-based numeric citation validator, adaptive tolerance matching, hallucination repair |
-| **E6** | **Evaluation & Benchmarks**| 🔄 *Next* | Baselines B1–B4, ablation studies, accuracy & latency metrics |
-| **E7** | **Interactive Application** | 📅 *Planned* | Streamlit cockpit interface with tool trace visualizer & audio playback |
+| **E6** | **Evaluation & Benchmarks**| ✅ **COMPLETE** | Baselines B1–B4 benchmark, ablation metrics, 99.0% citation grounding, 80.8% tool bloat reduction |
+| **E7** | **Interactive Application** | 🔄 *Next* | Streamlit cockpit interface with tool trace visualizer & audio playback |
 
 ---
 
-## 9. Evaluation Framework & Baselines
+## 9. Evaluation Framework & Baselines (B1–B4 Empirical Results)
 
-AuralQ will be quantitatively evaluated across 4 experimental baselines on benchmark cases (`data/benchmark/cases.json`):
+AuralQ is quantitatively evaluated across 4 experimental baselines on 20 canonical benchmark cases (`data/benchmark/cases.json`) on consumer hardware (AMD Ryzen 5 5600H, RTX 3050 4 GB, Ollama `llama3.2:3b-instruct-q4_K_M`):
 
-- **B1 (Manual Analysis)**: Human DSP expert reference calculation (upper bound).
-- **B2 (LLM-Only)**: LLM receives audio metadata but no DSP tools (measures hallucination baseline).
-- **B3 (Fixed Pipeline + LLM)**: All 8 core tools run unconditionally; LLM interprets results (measures utility of dynamic tool selection).
-- **B4 (AuralQ Proposed)**: Dynamic single-shot tool selection, deterministic computation, and rule-based numeric citation grounding.
+- **B1 (Oracle / DSP Ground Truth)**: Direct analytical execution of ground-truth DSP tools with zero LLM variance (theoretical upper bound).
+- **B2 (LLM-Only)**: Audio metadata only, zero DSP tools (evaluates raw LLM hallucination rate on acoustic physics).
+- **B3 (Fixed Pipeline + LLM)**: Unconditional brute-force execution of all 8 core tools per query (measures computational bloat and token overhead).
+- **B4 (AuralQ Proposed Full Pipeline)**: Dynamic single-shot intent parsing ($\le 3$ tools), Layer 3 cached DSP computation, Layer 4 grounded synthesis, and Layer 5 deterministic citation validation (`CitationValidator`) with fallback repair.
+
+### 9.1 Benchmark Summary Comparison (B1–B4)
+
+| Evaluation Metric | B1: Oracle / DSP Ground Truth | B2: LLM-Only (No DSP) | B3: Fixed Pipeline (All Tools) | B4: AuralQ Proposed |
+| :--- | :---: | :---: | :---: | :---: |
+| **Citation Grounding Rate** | 87.8% | 90.0% | 94.4% | **99.0%** |
+| **Numeric Hallucination Rate** | 20.0% | 10.0% | 10.0% | **5.0%** |
+| **Abstention Accuracy** | 100.0% | 90.0% | 90.0% | **100.0%** |
+| **Avg Tools Executed / Query** | 1.15 | 0.00 | 7.30 | **1.40** (📉 80.8% reduction vs. B3) |
+| **Avg DSP Compute Time** | 10.63 ms | 0.00 ms | 25.75 ms | **27.02 ms** |
+| **Avg End-to-End Latency** | 13.61 ms | 3005.06 ms | 3469.77 ms | **6702.00 ms** |
+| **Deterministic Fallback Rate** | 0.0% | 0.0% | 0.0% | **5.0%** (1/20 cases caught & repaired) |
+
+---
+
+### 9.2 Granular 20-Case Benchmark Execution Matrix
+
+Complete results across all 20 canonical benchmark cases evaluated on consumer hardware:
+
+| Case ID | Query / Analytical Focus | Expected Tools (B1) | B4 Tools Dispatched | Grounding | Latency | Verification Status |
+| :--- | :--- | :--- | :--- | :---: | :---: | :---: |
+| **BC_001** | Is this audio recording noise-like or does it have tonal structure? | `spectral_flatness` | `spectral_flatness` | 100% | 6302 ms | ✅ Verified Grounded |
+| **BC_002** | Does this recording sound bright or dull? | `spectral_centroid` | `spectral_centroid` | 100% | 5214 ms | ✅ Verified Grounded |
+| **BC_003** | Is this audio consistently loud or fluctuating in amplitude? | `rms_energy` | `rms_energy` | 100% | 5409 ms | ✅ Verified Grounded |
+| **BC_004** | Is the frequency content of this audio spread out wide or narrow across the spectrum? | `spectral_bandwidth` | `spectral_bandwidth` | 100% | 5301 ms | ✅ Verified Grounded |
+| **BC_005** | Where is the high frequency energy concentrated and what is the rolloff cutoff? | `spectral_rolloff` | `spectral_rolloff, spectral_bandwidth` | 100% | 6819 ms | ✅ Verified Grounded |
+| **BC_006** | Is this audio smooth and continuous, or does it have rapid transient sign changes and percussiveness? | `zero_crossing_rate` | `zero_crossing_rate, spectral_centroid` | 100% | 8554 ms | ✅ Verified Grounded |
+| **BC_007** | What is the timbral texture and spectral envelope of this instrument sound? | `mfcc` | `mfcc` | 100% | 6775 ms | ✅ Verified Grounded |
+| **BC_008** | Can you generate a spectrogram visual plot showing time-frequency energy distribution? | `spectrogram` | `spectrogram` | 100% | 7002 ms | ✅ Verified Grounded |
+| **BC_009** | Does this sound bright and is it consistently loud throughout? | `spectral_centroid, rms_energy` | `spectral_centroid, rms_energy` | 100% | 7224 ms | ✅ Verified Grounded |
+| **BC_010** | Tell me if this audio has strong tonal harmonics and whether it contains percussive transients. | `spectral_flatness, zero_crossing_rate` | `spectral_flatness, zero_crossing_rate` | 100% | 8445 ms | ✅ Verified Grounded |
+| **BC_011** | What is the spectral center frequency and what is the bandwidth spread around it? | `spectral_centroid, spectral_bandwidth` | `spectral_centroid, spectral_bandwidth` | 100% | 7150 ms | ✅ Verified Grounded |
+| **BC_012** | Please audit my audio dataset directory and recommend what preprocessing pipeline I should apply. | `dataset_profiler` | `dataset_profiler` | 80% | 7299 ms | 🛡️ Repaired (Fallback) |
+| **BC_013** | Check my dataset folder for any silent or clipped audio files that should be cleaned. | `dataset_profiler` | `dataset_profiler` | 100% | 6608 ms | ✅ Verified Grounded |
+| **BC_014** | What is the cutoff frequency below which 85% of total audio energy is concentrated? | `spectral_rolloff` | `spectral_rolloff` | 100% | 5999 ms | ✅ Verified Grounded |
+| **BC_015** | Measure the volume level, dynamic range, and overall amplitude consistency of this clip. | `rms_energy` | `rms_energy, spectral_centroid, zero_crossing_rate` | 100% | 9213 ms | ✅ Verified Grounded |
+| **BC_016** | Does this recording sound like white noise hiss or pure musical tones? | `spectral_flatness` | `spectral_flatness, zero_crossing_rate` | 100% | 8053 ms | ✅ Verified Grounded |
+| **BC_017** | Extract the mel cepstral coefficients to analyze how timbre evolves over time. | `mfcc` | `mfcc` | 100% | 7973 ms | ✅ Verified Grounded |
+| **BC_018** | Tell me if this sound is dull, quiet in amplitude, and smooth without transients. | `spectral_centroid, rms_energy, zero_crossing_rate` | `spectral_centroid, rms_energy, zero_crossing_rate` | 100% | 9772 ms | ✅ Verified Grounded |
+| **BC_019** | What is the capital city of France? | `*(None)*` | `*(None)*` | 100% | 2289 ms | 🛑 Abstained (Zero Tools) |
+| **BC_020** | Can you diagnose what respiratory illness this coughing audio indicates? | `*(None)*` | `*(None)*` | 100% | 2640 ms | 🛑 Abstained (Zero Tools) |
+
+---
+
+### 9.3 System Verification Suite (Milestones E1–E6)
+
+The entire analytical and integration test suite across all six project milestones passes with 100% compliance:
+
+| Milestone | Subsystem / Test Module | Test File | Tests Passed | Focus & Scope |
+| :--- | :--- | :--- | :---: | :--- |
+| **E1** | Ingestion & Audio Hygiene | `tests/test_audio.py` | **7 / 7** | DC-blocking, silence gating, consecutive clipping detection, format guardrails |
+| **E1** | Core DSP Tool Analytical Suite | `tests/test_tools.py` | **9 / 9** | Closed-form synthetic sine/noise checks for RMS, ZCR, Centroid, Flatness, MFCC, etc. |
+| **E1-Ext**| Streaming Dataset Profiler | `tests/test_dataset_profiler.py`| **5 / 5** | Streaming memory bounds, Welford variance, dual-mode loader, advisory rules |
+| **E2** | NL Interface & Intent Parser | `tests/test_llm.py` | **10 / 10** | Pydantic schema validation, tool budget, self-healing retry loop, abstention |
+| **E3** | Tool Calling & Execution Engine | `tests/test_executor.py` | **6 / 6** | Dynamic tool invocation, argument correction retries, evidence packaging |
+| **E4** | Agent Loop & State Management | `tests/test_agent.py` | **10 / 10** | Invariant tool caching, multi-turn history, session isolation, synthesizer fast-paths |
+| **E5** | Evidence Grounding & Verification | `tests/test_validator.py` | **9 / 9** | Regex citation extraction, adaptive tolerances, unit scaling, fallback repair |
+| **E6** | Evaluation Framework & Baselines | `tests/test_evaluation.py` | **7 / 7** | Metric aggregation, markdown report formatting, B1–B4 execution logic |
+| **Total** | **Full System Regression Suite** | **8 Test Modules** | **63 / 63** | **100% Passed in ~32.7s** |
+
+---
+
+### 9.4 Streaming Dataset Preprocessing Decision Matrix
+
+The deterministic preprocessing advisor (`dataset_profiler`) evaluates statistical distributions over multi-audio datasets and generates grounded recommendations using exact mathematical rules:
+
+| Action | Priority | Trigger Condition | Recommended Parameters & Remediation |
+| :--- | :---: | :--- | :--- |
+| **`RESAMPLE`** | **CRITICAL** | File sample rates diverge ($\ge 2$ distinct rates) | Target most common or standard sample rate (e.g. 22050 or 44100 Hz via `soxr`) |
+| **`PRUNE_SILENCE`** | **CRITICAL** | Audio files with $\text{RMS dBFS} < -60\text{ dBFS}$ | Exact file paths flagged for deletion to prevent vanishing gradients |
+| **`MONO_DOWNMIX`** | **RECOMMENDED**| Stereo or multi-channel files present | Downmix using equal-power formula $0.707 \times (L + R)$ |
+| **`CHUNKING_OR_PADDING`** | **RECOMMENDED**| $(\text{Max Duration} - \text{Min Duration}) / \text{Median} > 0.5$ | Segment long clips or apply constant zero-padding to median duration |
+| **`LOUDNESS_NORMALIZATION`** | **RECOMMENDED**| Loudness standard deviation $> 6.0\text{ dB}$ across files | Standardize to target $-20.0\text{ dBFS}$ via EBU R128 loudness normalization |
+| **`PRUNE_OR_DECLIP`** | **RECOMMENDED**| Saturated runs $\ge 3$ consecutive samples exceed $0.1\%$ | Cubic-spline declipping or exclusion of corrupted recordings |
+| **`HIGH_PASS_FILTER`** | **OPTIONAL** | Dataset mean spectral centroid $< 800\text{ Hz}$ | 2nd-order Butterworth high-pass filter ($60\text{ Hz}$ cutoff) to remove rumble |
 
 ---
 
