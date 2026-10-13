@@ -8,6 +8,7 @@ from src.agent.executor import ToolExecutor
 from src.agent.schemas import AgentResponse, EvidencePackage, TurnRecord
 from src.agent.state import SessionState
 from src.agent.synthesizer import ResponseSynthesizer
+from src.agent.validator import CitationValidator
 from src.audio.loader import AudioLoadResult, load_audio_file
 from src.audio.validation import AudioMetadata
 from src.llm.client import OllamaClient
@@ -18,7 +19,8 @@ class AuralQAgent:
     """
     Top-level orchestrator for AuralQ.
     Coordinates audio ingestion, intent parsing, deterministic tool execution,
-    tool result caching, multi-turn state, and grounded natural-language synthesis.
+    tool result caching, multi-turn state, grounded natural-language synthesis,
+    and deterministic numeric citation verification.
     """
 
     def __init__(
@@ -27,11 +29,13 @@ class AuralQAgent:
         executor: Optional[ToolExecutor] = None,
         synthesizer: Optional[ResponseSynthesizer] = None,
         session_state: Optional[SessionState] = None,
+        validator: Optional[CitationValidator] = None,
     ):
         self.client = client or OllamaClient()
         self.executor = executor or ToolExecutor(client=self.client)
         self.synthesizer = synthesizer or ResponseSynthesizer(client=self.client)
         self.session_state = session_state or SessionState()
+        self.validator = validator or CitationValidator()
 
     def load_audio(self, file_path_or_data: Union[str, Path, Any]) -> AudioLoadResult:
         """
@@ -152,11 +156,13 @@ class AuralQAgent:
                 abstention_reason=intent.abstention_reason,
             )
             resp_text, synth_ms = self.synthesizer.synthesize(question, evidence)
+            grounding_report = self.validator.validate(resp_text, evidence, question)
             total_ms = round((time.perf_counter() - t_total_start) * 1000, 2)
             latencies = {
                 "intent_ms": intent_ms,
                 "dsp_ms": 0.0,
                 "synthesis_ms": synth_ms,
+                "validation_ms": 0.0,
                 "total_ms": total_ms,
             }
             turn = TurnRecord(
@@ -167,6 +173,7 @@ class AuralQAgent:
                 evidence=evidence,
                 response_text=resp_text,
                 latency_breakdown=latencies,
+                grounding_report=grounding_report,
             )
             self.session_state.add_turn(turn)
             return AgentResponse(
@@ -176,6 +183,7 @@ class AuralQAgent:
                 evidence=evidence,
                 turn_record=turn,
                 latency_breakdown=latencies,
+                grounding_report=grounding_report,
             )
 
         # Step 4: Tool Execution with Cache Interception
@@ -270,17 +278,28 @@ class AuralQAgent:
 
         # Step 6: Response Synthesis
         history_ctx = self.session_state.get_recent_history_context(max_turns=3)
-        resp_text, synth_ms = self.synthesizer.synthesize(
+        raw_resp_text, synth_ms = self.synthesizer.synthesize(
             query=question,
             evidence=evidence,
             history_context=history_ctx,
         )
+
+        # Step 7: Deterministic Citation Validation & Grounding Repair
+        t_val_start = time.perf_counter()
+        final_text, grounding_report = self.validator.repair_if_unverified(
+            response_text=raw_resp_text,
+            evidence=evidence,
+            query=question,
+            synthesizer=self.synthesizer,
+        )
+        val_ms = round((time.perf_counter() - t_val_start) * 1000, 2)
 
         total_ms = round((time.perf_counter() - t_total_start) * 1000, 2)
         latencies = {
             "intent_ms": intent_ms,
             "dsp_ms": dsp_ms,
             "synthesis_ms": synth_ms,
+            "validation_ms": val_ms,
             "total_ms": total_ms,
         }
 
@@ -290,18 +309,20 @@ class AuralQAgent:
             query=question,
             parsed_intent=intent,
             evidence=evidence,
-            response_text=resp_text,
+            response_text=final_text,
             latency_breakdown=latencies,
             cached_tools_used=cached_tools_used,
+            grounding_report=grounding_report,
         )
         self.session_state.add_turn(turn)
 
         return AgentResponse(
             query=question,
-            response_text=resp_text,
+            response_text=final_text,
             status="success" if overall_status in ["SUCCESS", "PARTIAL"] else "dsp_error",
             evidence=evidence,
             turn_record=turn,
             latency_breakdown=latencies,
             cached_tools_used=cached_tools_used,
+            grounding_report=grounding_report,
         )

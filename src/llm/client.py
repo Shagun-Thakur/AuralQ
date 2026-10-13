@@ -46,7 +46,7 @@ class OllamaClient:
         endpoint: Optional[str] = None,
         num_ctx: int = 2048,
         temperature: float = 0.0,
-        timeout_sec: float = 30.0,
+        timeout_sec: float = 60.0,
         max_retries: int = 2,
     ):
         cfg = get_models_config()
@@ -56,7 +56,7 @@ class OllamaClient:
         self.endpoint = endpoint or primary_cfg.get("endpoint", "http://localhost:11434/api/generate")
         self.num_ctx = num_ctx or primary_cfg.get("num_ctx", 2048)
         self.temperature = temperature if temperature is not None else primary_cfg.get("temperature", 0.0)
-        self.timeout_sec = timeout_sec
+        self.timeout_sec = primary_cfg.get("timeout_sec", timeout_sec)
         self.max_retries = max_retries
 
     def _call_ollama_raw(

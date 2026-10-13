@@ -64,6 +64,26 @@ class EvidencePackage(BaseModel):
         return "\n".join(lines)
 
 
+class CitationMatch(BaseModel):
+    """Details of an individual numerical token identified and checked in the response."""
+    raw_token: str = Field(description="The exact numeric substring extracted from the response.")
+    parsed_value: Optional[float] = Field(default=None, description="Numeric float representation of token.")
+    matched_metric: Optional[str] = Field(default=None, description="Canonical metric or alias this matched against.")
+    match_type: Literal["exact_alias", "tolerance_metric", "metadata", "query_echo"] = "exact_alias"
+    is_grounded: bool = True
+
+
+class GroundingReport(BaseModel):
+    """Deterministic audit report for numeric citation grounding in an agent response."""
+    is_fully_grounded: bool = Field(description="True if all numeric claims are grounded in evidence.")
+    grounding_score: float = Field(default=1.0, ge=0.0, le=1.0, description="Proportion of verified numbers (0.0 to 1.0).")
+    total_numbers_cited: int = 0
+    verified_citations: List[CitationMatch] = Field(default_factory=list)
+    hallucinated_numbers: List[str] = Field(default_factory=list, description="Unverified numerical tokens.")
+    was_repaired: bool = Field(default=False, description="True if response was substituted with deterministic fallback.")
+    original_response_text: Optional[str] = Field(default=None, description="Original ungrounded text if repaired.")
+
+
 class TurnRecord(BaseModel):
     """Encapsulates a single completed conversational turn in an agent session."""
     turn_id: int = Field(description="Sequential 1-based index of this turn.")
@@ -79,6 +99,10 @@ class TurnRecord(BaseModel):
     cached_tools_used: List[str] = Field(
         default_factory=list,
         description="Names of tools whose results were retrieved from session cache without DSP re-computation.",
+    )
+    grounding_report: Optional[GroundingReport] = Field(
+        default=None,
+        description="Deterministic citation verification and hallucination audit.",
     )
 
 
@@ -96,6 +120,10 @@ class AgentResponse(BaseModel):
     cached_tools_used: List[str] = Field(
         default_factory=list,
         description="Tools resolved from cache.",
+    )
+    grounding_report: Optional[GroundingReport] = Field(
+        default=None,
+        description="Deterministic numeric citation grounding report.",
     )
 
 

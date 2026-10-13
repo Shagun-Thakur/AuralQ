@@ -213,9 +213,17 @@ tests/test_tools.py::test_spectral_bandwidth_and_rolloff PASSED
 tests/test_tools.py::test_mfcc_extraction PASSED
 tests/test_tools.py::test_spectrogram_headless PASSED
 tests/test_tools.py::test_insufficient_samples_guard PASSED
-tests/test_tools.py::test_tool_registry_and_dispatcher PASSED
+tests/test_validator.py::test_parse_numeric_candidate PASSED
+tests/test_validator.py::test_extract_numeric_tokens PASSED
+tests/test_validator.py::test_validator_exact_alias_and_tolerance_match PASSED
+tests/test_validator.py::test_validator_detects_hallucinated_numbers PASSED
+tests/test_validator.py::test_validator_query_echo_grounding PASSED
+tests/test_validator.py::test_validator_abstention_and_qualitative_passes PASSED
+tests/test_validator.py::test_validator_deterministic_repair PASSED
+tests/test_validator.py::test_agent_with_hallucinated_response_triggers_repair PASSED
+tests/test_validator.py::test_agent_with_grounded_response_passes_unmodified PASSED
 
-======================= 47 passed in ~32s =======================
+======================= 56 passed in ~31s =======================
 ```
 
 ---
@@ -228,8 +236,8 @@ tests/test_tools.py::test_tool_registry_and_dispatcher PASSED
 | **E2** | **NL Interface** | ✅ **COMPLETE** | Ollama client, Pydantic single-shot intent parser, 20-case benchmark |
 | **E3** | **Tool Calling & Execution** | ✅ **COMPLETE** | Tool executor, argument correction retry loop, evidence packaging, 100% benchmark |
 | **E4** | **Agent Loop & State** | ✅ **COMPLETE** | Agent orchestrator (`AuralQAgent`), session state, tool caching, response synthesizer |
-| **E5** | **Evidence Grounding** | 🔄 *Next* | Rule-based numeric citation validator, strict hallucination audit |
-| **E6** | **Evaluation & Benchmarks**| 📅 *Planned* | Baselines B1–B4, ablation studies, accuracy & latency metrics |
+| **E5** | **Evidence Grounding** | ✅ **COMPLETE** | Rule-based numeric citation validator, adaptive tolerance matching, hallucination repair |
+| **E6** | **Evaluation & Benchmarks**| 🔄 *Next* | Baselines B1–B4, ablation studies, accuracy & latency metrics |
 | **E7** | **Interactive Application** | 📅 *Planned* | Streamlit cockpit interface with tool trace visualizer & audio playback |
 
 ---
