@@ -223,6 +223,10 @@ def dataset_profiler_tool(
         "duration_hours": generate_numeric_citation_aliases(profile.total_duration_hours, unit="hours"),
         "mean_centroid": generate_numeric_citation_aliases(profile.spectral_centroid_mean_hz, unit="Hz"),
     }
+    for rec in recommendations:
+        for cit in rec.canonical_citations:
+            citation_aliases.setdefault(f"rec_{rec.action.lower()}", []).append(cit)
+
 
     return ToolResultModel(
         tool="dataset_profiler",

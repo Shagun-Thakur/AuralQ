@@ -267,3 +267,36 @@ def test_agent_with_grounded_response_passes_unmodified():
     finally:
         Path(tmp_wav).unlink(missing_ok=True)
 
+
+def test_dataset_audit_report_grounding_and_synthesis():
+    """Verify that dataset audit fallback report formats cleanly and passes 100% citation grounding."""
+    from src.agent.schemas import EvidencePackage
+    from src.agent.synthesizer import ResponseSynthesizer
+    from src.tools.dataset_advisor import dataset_profiler_tool
+
+    res = dataset_profiler_tool("data/samples")
+    ev = EvidencePackage(
+        query="Audit my dataset",
+        status="SUCCESS",
+        tools_called=["dataset_profiler"],
+        consolidated_metrics={f"dataset_profiler.{k}": v for k, v in res.result.items()},
+        consolidated_anchors=res.perceptual_anchors,
+        all_citation_aliases={f"dataset_profiler.{k}": v for k, v in res.citation_aliases.items()},
+    )
+    synth = ResponseSynthesizer()
+    txt = synth._deterministic_fallback_synthesis(ev)
+
+    # Check clean markdown report structure
+    assert "### 📊 Audio Dataset Audit Summary" in txt
+    assert "Recommended Preprocessing Pipeline:" in txt
+    assert "RESAMPLE" in txt
+
+    # Validate grounding
+    validator = CitationValidator()
+    report = validator.validate(txt, ev, "Audit my dataset")
+    assert report.is_fully_grounded is True
+    assert report.grounding_score == 1.0
+    assert len(report.hallucinated_numbers) == 0
+    assert len(report.verified_citations) > 20
+
+

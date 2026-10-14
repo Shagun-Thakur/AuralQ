@@ -222,6 +222,10 @@ tests/test_validator.py::test_validator_abstention_and_qualitative_passes PASSED
 tests/test_validator.py::test_validator_deterministic_repair PASSED
 tests/test_validator.py::test_agent_with_hallucinated_response_triggers_repair PASSED
 tests/test_validator.py::test_agent_with_grounded_response_passes_unmodified PASSED
+tests/test_db.py::test_session_db_initialization PASSED
+tests/test_db.py::test_save_and_retrieve_turn PASSED
+tests/test_db.py::test_session_deletion_cascade PASSED
+tests/test_db.py::test_ephemeral_cloud_mode PASSED
 tests/test_evaluation.py::test_compute_baseline_summary_statistics PASSED
 tests/test_evaluation.py::test_benchmark_comparison_report_markdown_generation PASSED
 tests/test_evaluation.py::test_run_baseline_b1_oracle PASSED
@@ -230,7 +234,23 @@ tests/test_evaluation.py::test_run_baseline_b2_llm_only_catches_hallucination PA
 tests/test_evaluation.py::test_run_baseline_b3_fixed_pipeline_runs_all_tools PASSED
 tests/test_evaluation.py::test_run_baseline_b4_auralq_dynamic PASSED
 
-======================= 63 passed in ~32s =======================
+======================= 67 passed in ~39s =======================
+```
+
+### Launching the Interactive Studio Cockpit
+
+AuralQ provides a zero-setup desktop launcher and standard web startup:
+
+```bash
+# Windows (One-Click Launcher)
+run_auralq.bat
+
+# Linux / macOS
+chmod +x run_auralq.sh
+./run_auralq.sh
+
+# Or direct Streamlit command:
+streamlit run app/streamlit_app.py
 ```
 
 ---
@@ -245,7 +265,7 @@ tests/test_evaluation.py::test_run_baseline_b4_auralq_dynamic PASSED
 | **E4** | **Agent Loop & State** | ✅ **COMPLETE** | Agent orchestrator (`AuralQAgent`), session state, tool caching, response synthesizer |
 | **E5** | **Evidence Grounding** | ✅ **COMPLETE** | Rule-based numeric citation validator, adaptive tolerance matching, hallucination repair |
 | **E6** | **Evaluation & Benchmarks**| ✅ **COMPLETE** | Baselines B1–B4 benchmark, ablation metrics, 99.0% citation grounding, 80.8% tool bloat reduction |
-| **E7** | **Interactive Application** | 🔄 *Next* | Streamlit cockpit interface with tool trace visualizer & audio playback |
+| **E7** | **Interactive Application** | ✅ **COMPLETE** | Streamlit cockpit, Dark Studio UI, dual-engine mode, SQLite local persistence, tool traces |
 
 ---
 
@@ -315,7 +335,8 @@ The entire analytical and integration test suite across all six project mileston
 | **E4** | Agent Loop & State Management | `tests/test_agent.py` | **10 / 10** | Invariant tool caching, multi-turn history, session isolation, synthesizer fast-paths |
 | **E5** | Evidence Grounding & Verification | `tests/test_validator.py` | **9 / 9** | Regex citation extraction, adaptive tolerances, unit scaling, fallback repair |
 | **E6** | Evaluation Framework & Baselines | `tests/test_evaluation.py` | **7 / 7** | Metric aggregation, markdown report formatting, B1–B4 execution logic |
-| **Total** | **Full System Regression Suite** | **8 Test Modules** | **63 / 63** | **100% Passed in ~32.7s** |
+| **E7** | Session Persistence & SQLite Engine | `tests/test_db.py` | **4 / 4** | SQLite turn persistence, session cascading deletion, ephemeral cloud mode |
+| **Total** | **Full System Regression Suite** | **9 Test Modules** | **67 / 67** | **100% Passed in ~39.6s** |
 
 ---
 

@@ -43,25 +43,40 @@ def rms_energy(
     # Coefficient of variation (CV = std / mean) describes loudness stability
     cv = float(std_rms / (mean_rms + 1e-9))
 
-    # Perceptual anchor mapping
+    # Perceptual stability anchor mapping
     if cv < 0.15:
-        anchor = "consistent"
+        stability_anchor = "consistent"
     elif cv < 0.35:
-        anchor = "moderately fluctuating"
+        stability_anchor = "moderately fluctuating"
     else:
-        anchor = "highly fluctuating / dynamic"
+        stability_anchor = "highly fluctuating / dynamic"
+
+    # Convert linear RMS mean to dBFS for absolute perceptual volume level
+    mean_rms_dbfs = float(20.0 * np.log10(mean_rms + 1e-9))
+
+    # Perceptual level anchor mapping
+    if mean_rms_dbfs < -45.0:
+        level_anchor = "quiet / faint"
+    elif mean_rms_dbfs < -22.0:
+        level_anchor = "moderate volume"
+    elif mean_rms_dbfs < -8.0:
+        level_anchor = "loud / high energy"
+    else:
+        level_anchor = "very loud / near full-scale ceiling"
 
     result_data = {
         "mean_rms": round(mean_rms, 4),
+        "mean_rms_dbfs": round(mean_rms_dbfs, 2),
         "std_rms": round(std_rms, 4),
         "max_rms": round(max_rms, 4),
         "min_rms": round(min_rms, 4),
         "dynamic_range_cv": round(cv, 4),
-        "unit": "linear_amplitude",
+        "unit": "linear_amplitude_and_dbfs",
     }
 
     aliases = {
         "mean_rms": generate_numeric_citation_aliases(round(mean_rms, 4)),
+        "mean_rms_dbfs": generate_numeric_citation_aliases(round(mean_rms_dbfs, 2), unit="dBFS"),
         "dynamic_range_cv": generate_numeric_citation_aliases(round(cv, 4)),
     }
 
@@ -73,10 +88,12 @@ def rms_energy(
         parameters=args.model_dump(),
         result=result_data,
         perceptual_anchors={
-            "loudness_stability": anchor,
-            "grounded_term": anchor,
+            "loudness_stability": stability_anchor,
+            "perceived_level": level_anchor,
+            "grounded_term": f"{level_anchor}, {stability_anchor}",
         },
         citation_aliases=aliases,
         execution_time_ms=round(elapsed, 2),
     )
+
 

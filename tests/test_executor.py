@@ -239,5 +239,6 @@ def test_live_e2e_pipeline(synthetic_sine_1000hz):
     # Check that computed centroid of 1000 Hz sine is verified
     assert "mean_hz" in evidence.consolidated_metrics
     assert np.isclose(evidence.consolidated_metrics["mean_hz"], 1000.0, atol=25.0)
-    assert evidence.consolidated_anchors["perceived_brightness"] == "dull"
+    assert "sharp" in evidence.consolidated_anchors["perceived_brightness"]
+
 

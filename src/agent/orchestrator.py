@@ -25,7 +25,7 @@ class AuralQAgent:
 
     def __init__(
         self,
-        client: Optional[OllamaClient] = None,
+        client: Optional[Any] = None,
         executor: Optional[ToolExecutor] = None,
         synthesizer: Optional[ResponseSynthesizer] = None,
         session_state: Optional[SessionState] = None,

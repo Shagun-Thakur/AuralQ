@@ -47,13 +47,23 @@ def spectral_centroid(
     std_cent = float(np.std(cent))
     median_cent = float(np.median(cent))
 
-    # Perceptual anchor mapping
-    if mean_cent >= 3500.0:
-        anchor = "bright"
-    elif mean_cent <= 1200.0:
-        anchor = "dull"
+    # Psychoacoustically grounded perceptual anchor mapping
+    if mean_cent < 500.0:
+        anchor = "dull / dark (low frequency dominance)"
+    elif mean_cent < 2500.0:
+        if std_cent < 100.0 and mean_cent >= 850.0:
+            anchor = "sharp / prominent pure tone (concentrated near 1 kHz)"
+        elif std_cent < 100.0:
+            anchor = "focused midrange tone"
+        elif mean_cent < 1500.0:
+            anchor = "balanced / warm midrange"
+        else:
+            anchor = "moderate brightness / upper-mid presence"
+    elif mean_cent < 4000.0:
+        anchor = "bright / crisp presence"
     else:
-        anchor = "balanced / neutral"
+        anchor = "sharp / piercing (treble-dominant)"
+
 
     result_data = {
         "mean_hz": round(mean_cent, 2),
@@ -117,7 +127,15 @@ def spectral_bandwidth(
     mean_bw = float(np.mean(bw))
     std_bw = float(np.std(bw))
 
-    anchor = "narrow" if mean_bw < 1500.0 else "wide"
+    # Perceptual anchor mapping based on spectral spread
+    if mean_bw < 250.0:
+        anchor = "narrow (pure tone / discrete harmonics)"
+    elif mean_bw < 1500.0:
+        anchor = "narrow"
+    elif mean_bw < 2800.0:
+        anchor = "moderate spectral spread"
+    else:
+        anchor = "wide / broadband"
 
     result_data = {
         "mean_bandwidth_hz": round(mean_bw, 2),
@@ -179,7 +197,14 @@ def spectral_rolloff(
     mean_ro = float(np.mean(rolloff))
     std_ro = float(np.std(rolloff))
 
-    anchor = "low-frequency concentrated" if mean_ro < 3000.0 else "high-frequency extended"
+    # Perceptual anchor mapping based on energy cutoff frequency
+    if mean_ro < 800.0:
+        anchor = "bass / low-frequency concentrated (< 800 Hz)"
+    elif mean_ro < 3000.0:
+        anchor = "mid-frequency focused (800 Hz - 3 kHz)"
+    else:
+        anchor = "high-frequency extended (> 3 kHz)"
+
 
     result_data = {
         "mean_rolloff_hz": round(mean_ro, 2),

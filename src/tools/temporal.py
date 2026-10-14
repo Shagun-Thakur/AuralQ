@@ -40,13 +40,19 @@ def zero_crossing_rate(
     max_zcr = float(np.max(zcr))
     min_zcr = float(np.min(zcr))
 
-    # Perceptual anchor mapping
-    if mean_zcr < 0.05:
-        anchor = "smooth / tonal"
-    elif mean_zcr <= 0.20:
-        anchor = "moderate variation"
+    # Perceptual anchor mapping accounting for periodicity (std_zcr) and frequency/noise (mean_zcr)
+    if std_zcr < 0.02:
+        if mean_zcr < 0.12:
+            anchor = "smooth / steady tonal pitch"
+        else:
+            anchor = "steady high-frequency tone"
+    elif mean_zcr < 0.08:
+        anchor = "smooth / low-frequency or voiced speech"
+    elif mean_zcr <= 0.25:
+        anchor = "moderate temporal variation / mixed audio"
     else:
-        anchor = "noisy / percussive / rapidly varying"
+        anchor = "noisy / percussive / rapidly varying (high transient content)"
+
 
     result_data = {
         "mean_zcr": round(mean_zcr, 4),

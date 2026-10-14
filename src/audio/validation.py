@@ -18,6 +18,12 @@ class AudioMetadata(BaseModel):
     clipping_ratio: float = 0.0
     warnings: List[str] = Field(default_factory=list)
 
+    @property
+    def channels(self) -> int:
+        """Convenience alias for num_channels."""
+        return self.num_channels
+
+
     def to_context_dict(self) -> dict:
         """Convert metadata to compact dictionary for prompt context injection."""
         return {

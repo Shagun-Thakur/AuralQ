@@ -67,10 +67,13 @@ class CitationValidator:
         """Extract all candidate numerical tokens from text using regex."""
         if not text:
             return []
-        matches = NUMERIC_TOKEN_PATTERN.findall(text)
+        # Strip markdown list markers (e.g. "\n1. ", "\n2. ", "^1. ") so list numbering is not treated as numeric claims
+        cleaned_text = re.sub(r"(?:^|\n)\s*\d+\.\s+", "\n", text)
+        matches = NUMERIC_TOKEN_PATTERN.findall(cleaned_text)
         # Strip trailing punctuation attached to matches
         clean_tokens = [m.strip().rstrip(".,;:!?)]}\"'") for m in matches if m.strip()]
         return clean_tokens
+
 
     def validate(
         self,
@@ -111,11 +114,43 @@ class CitationValidator:
             for a in aliases:
                 alias_to_metric[a.strip().lower()] = metric_name
 
-        # Extract numeric metrics from evidence
+        # Extract numeric metrics from evidence (supporting scalars, nested dictionaries, and recommendation lists)
         numeric_metrics: Dict[str, float] = {}
+
+        def _extract_nested_numerics(prefix: str, val: Any) -> None:
+            if isinstance(val, (int, float)) and not isinstance(val, bool) and not math.isnan(val) and not math.isinf(val):
+                numeric_metrics[prefix] = float(val)
+            elif isinstance(val, str):
+                for m_tok in NUMERIC_TOKEN_PATTERN.findall(val):
+                    v_num, _ = parse_numeric_candidate(m_tok)
+                    if v_num is not None:
+                        numeric_metrics[f"{prefix}.embedded_{v_num}"] = v_num
+            elif isinstance(val, dict):
+                for sub_k, sub_v in val.items():
+                    # If key itself is numeric (e.g. sample rates 22050, 16000 or channel counts 1, 2)
+                    try:
+                        numeric_metrics[f"{prefix}.key_{sub_k}"] = float(sub_k)
+                    except (ValueError, TypeError):
+                        pass
+                    _extract_nested_numerics(f"{prefix}.{sub_k}", sub_v)
+            elif isinstance(val, (list, tuple)):
+                for idx, item in enumerate(val):
+                    if isinstance(item, dict):
+                        for item_k, item_v in item.items():
+                            if item_k == "canonical_citations" and isinstance(item_v, list):
+                                for cit in item_v:
+                                    if isinstance(cit, str) and cit.strip():
+                                        alias_to_metric[cit.strip().lower()] = f"{prefix}[{idx}].canonical_citation"
+                            else:
+                                _extract_nested_numerics(f"{prefix}[{idx}].{item_k}", item_v)
+                    elif isinstance(item, (int, float, str, dict, list)):
+                        _extract_nested_numerics(f"{prefix}[{idx}]", item)
+
+
+
         for k, v in evidence.consolidated_metrics.items():
-            if isinstance(v, (int, float)) and not math.isnan(v) and not math.isinf(v):
-                numeric_metrics[k] = float(v)
+            _extract_nested_numerics(k, v)
+
 
         # Extract audio metadata numbers
         metadata_numbers: Dict[str, float] = {}

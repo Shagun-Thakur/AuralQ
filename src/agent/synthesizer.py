@@ -17,7 +17,13 @@ CRITICAL GROUNDING RULES:
 4. WARNING DISCLOSURES: If the evidence contains INGESTION_WARNINGS or DSP_WARNINGS (such as clipping or silence), you MUST explicitly mention them as cautionary notes.
 5. ABSTENTION BEHAVIOR: If STATUS is ABSTAIN, politely explain the abstention reason and clarify that AuralQ specializes strictly in deterministic acoustic signal processing and dataset profiling.
 6. CONCISENESS & TONE: Keep the response direct, scientific, and concise (under 150 words). Avoid generic introductory fluff (e.g. "Sure! Here is what I found:").
+7. PSYCHOACOUSTIC REASONING:
+   - Frequencies < 500 Hz indicate low-frequency bass concentration (dark / dull).
+   - Frequencies between 500 Hz and 2000 Hz form the auditory midrange. A concentrated pure tone around 1 kHz (indicated by narrow standard deviation or low bandwidth) sits right in the human ear's high-sensitivity resonance zone and is perceived as sharp, clear, or piercing rather than dull.
+   - Frequencies > 2500 Hz indicate upper-mid/treble presence or crispness (bright / sharp).
+   - Characterize whether the sound is a pure tone or broadband based on the measured standard deviation, bandwidth, and qualitative anchor.
 """
+
 
 
 class ResponseSynthesizer:
@@ -82,6 +88,60 @@ class ResponseSynthesizer:
         fallback_text = self._deterministic_fallback_synthesis(evidence)
         return fallback_text, synthesis_time_ms
 
+    def _format_dataset_profile_report(self, evidence: EvidencePackage) -> str:
+        """Format dataset audit evidence into a clean, structured executive report."""
+        metrics = evidence.consolidated_metrics
+        path = metrics.get("dataset_profiler.dataset_path", "Dataset")
+        total_files = metrics.get("dataset_profiler.total_files", 0)
+        total_dur_hours = metrics.get("dataset_profiler.total_duration_hours", 0.0)
+        total_dur_sec = round(total_dur_hours * 3600, 2)
+        sr_dist = metrics.get("dataset_profiler.sample_rate_distribution", {})
+        ch_dist = metrics.get("dataset_profiler.channel_distribution", {})
+        silent_count = metrics.get("dataset_profiler.silent_files_count", 0)
+        clipped_count = metrics.get("dataset_profiler.clipped_files_count", 0)
+        corrupted_count = metrics.get("dataset_profiler.corrupted_files_count", 0)
+        recs = metrics.get("dataset_profiler.recommendations", [])
+        centroid = metrics.get("dataset_profiler.spectral_centroid_mean_hz")
+        flatness = metrics.get("dataset_profiler.spectral_flatness_mean")
+
+        sr_str = ", ".join(f"{sr} Hz ({c} files)" for sr, c in sorted(sr_dist.items())) if sr_dist else "Uniform"
+        ch_str = ", ".join(f"{'Mono' if ch == 1 else ('Stereo' if ch == 2 else f'{ch}-channel')} ({c} files)" for ch, c in sorted(ch_dist.items())) if ch_dist else "Uniform"
+
+        lines = [
+            f"### 📊 Audio Dataset Audit Summary: `{path}`",
+            f"- **Dataset Volume**: {total_files} audio file(s) ({total_dur_hours:.3f} hours / {total_dur_sec:.1f}s)",
+            f"- **Sample Rate Distribution**: {sr_str}",
+            f"- **Channel Layout**: {ch_str}",
+            f"- **Acoustic Hygiene Anomalies**: {silent_count} silent file(s), {clipped_count} clipped file(s), {corrupted_count} corrupted file(s).",
+        ]
+
+        if centroid is not None and flatness is not None:
+            lines.append(f"- **Mean Spectral Centroid**: {centroid:.2f} Hz | **Mean Spectral Flatness**: {flatness:.4f}")
+
+        if evidence.consolidated_anchors:
+            anchors_clean = [f"**{k.replace('dataset_profiler.', '').replace('_', ' ').title()}**: `{v}`" for k, v in evidence.consolidated_anchors.items()]
+            lines.append(f"- **Acoustic Assessment**: {', '.join(anchors_clean)}")
+
+        if recs:
+            lines.append("\n### 🛠️ Recommended Preprocessing Pipeline:")
+            for idx, r in enumerate(recs, 1):
+                prio = r.get("priority", "RECOMMENDED")
+                action = r.get("action", "ACTION")
+                reason = r.get("reason", "")
+                params = r.get("parameters", {})
+                param_strs = [f"`{k}={v}`" for k, v in params.items()]
+                param_formatted = ", ".join(param_strs) if param_strs else "default"
+                lines.append(f"{idx}. **[{prio}] {action}**")
+                lines.append(f"   - **Reason**: {reason}")
+                lines.append(f"   - **Parameters**: {param_formatted}")
+        else:
+            lines.append("\n✅ **No preprocessing required**: All audio files exhibit consistent acoustic hygiene.")
+
+        if evidence.warnings:
+            lines.append(f"\n*Warnings: {'; '.join(evidence.warnings)}*")
+
+        return "\n".join(lines)
+
     def _deterministic_fallback_synthesis(self, evidence: EvidencePackage) -> str:
         """Rule-based template synthesis used as a resilient fallback if LLM generation fails."""
         lines = []
@@ -89,15 +149,27 @@ class ResponseSynthesizer:
         if evidence.status == "TOOL_FAILURE":
             return f"Acoustic measurement failed for this query. Warnings: {'; '.join(evidence.warnings)}"
 
+        # Check if dataset profiler was executed
+        if any(k.startswith("dataset_profiler.") for k in evidence.consolidated_metrics):
+            return self._format_dataset_profile_report(evidence)
+
         # Report perceptual anchors
         if evidence.consolidated_anchors:
             anchor_strs = [f"{k}: '{v}'" for k, v in evidence.consolidated_anchors.items()]
             lines.append(f"Acoustic assessment indicates {', '.join(anchor_strs)}.")
 
-        # Report measured metrics
+        # Report measured metrics cleanly (skipping raw dict dumps)
         if evidence.consolidated_metrics:
-            metric_strs = [f"{k} = {v}" for k, v in evidence.consolidated_metrics.items()]
-            lines.append(f"Measured values: {', '.join(metric_strs)}.")
+            metric_strs = []
+            for k, v in evidence.consolidated_metrics.items():
+                if isinstance(v, (int, float, str, bool)):
+                    metric_strs.append(f"{k} = {v}")
+                elif isinstance(v, dict):
+                    inner = ", ".join(f"{subk}={subv}" for subk, subv in v.items() if isinstance(subv, (int, float, str, bool)))
+                    if inner:
+                        metric_strs.append(f"{k} = {{{inner}}}")
+            if metric_strs:
+                lines.append(f"Measured values: {', '.join(metric_strs)}.")
 
         # Disclose any warnings
         if evidence.warnings:
@@ -107,4 +179,5 @@ class ResponseSynthesizer:
             lines.append("Acoustic analysis completed with no anomalous features detected.")
 
         return " ".join(lines)
+
 
