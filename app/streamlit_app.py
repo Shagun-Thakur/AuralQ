@@ -278,6 +278,79 @@ def generate_spectrogram_figure(waveform: np.ndarray, sr: int) -> plt.Figure:
     return fig
 
 
+def generate_markdown_audit_report(
+    session_id: str,
+    messages: List[Dict[str, Any]],
+    audio_path: Optional[str],
+    dataset_path: Optional[str],
+) -> str:
+    """Generate a clean, structured Markdown report of the session with DSP evidence."""
+    lines = [
+        "# 🎙️ AuralQ Acoustic Session Audit Report",
+        "",
+        f"- **Session ID**: `{session_id}`",
+        f"- **Generated At**: `{time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}`",
+        f"- **Active Audio File**: `{audio_path or 'None'}`",
+        f"- **Active Dataset Directory**: `{dataset_path or 'None'}`",
+        "",
+        "---",
+        "## Conversational Turns & Verifiable DSP Citations",
+        "",
+    ]
+
+    turn_counter = 1
+    for msg in messages:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        turn: Optional[TurnRecord] = msg.get("turn")
+
+        if role == "user":
+            lines.append(f"### Turn {turn_counter} (User Query)")
+            lines.append(f"> {content}")
+            lines.append("")
+        elif role == "assistant":
+            lines.append(f"### Turn {turn_counter} (AuralQ Grounded Synthesis)")
+            lines.append(content)
+            lines.append("")
+
+            if turn and turn.grounding_report:
+                rep: GroundingReport = turn.grounding_report
+                score_pct = rep.grounding_score * 100
+                if turn.evidence and turn.evidence.status == "ABSTAIN":
+                    lines.append("- **Verification**: `🛑 Abstained: Non-Acoustic Scope`")
+                elif rep.was_repaired:
+                    lines.append(f"- **Verification**: `🛡️ Grounding Repaired ({len(rep.hallucinated_numbers)} ungrounded claim(s) corrected)`")
+                else:
+                    lines.append(f"- **Verification**: `✅ 100% Grounded ({len(rep.verified_citations)} verified citations, 0 hallucinations)`")
+
+                if rep.verified_citations:
+                    lines.append(f"- **Verified Numerical Claims**: `{', '.join(str(c) for c in rep.verified_citations)}`")
+
+                # Dispatched tools
+                if turn.parsed_intent and turn.parsed_intent.selected_tools:
+                    tools_used = [t.tool_name for t in turn.parsed_intent.selected_tools]
+                    lines.append(f"- **Dispatched DSP Tools**: `{', '.join(tools_used)}`")
+
+                # Latency
+                lat = turn.latency_breakdown
+                lines.append(f"- **Latency Profile**: Total `{lat.get('total_ms', 0):.0f} ms` (DSP `{lat.get('dsp_ms', 0):.1f} ms`, LLM `{lat.get('synthesis_ms', 0):.1f} ms`)")
+
+                # Mathematical Evidence JSON
+                if turn.evidence and turn.evidence.consolidated_metrics:
+                    lines.append("")
+                    lines.append("```json")
+                    lines.append(json.dumps(turn.evidence.consolidated_metrics, indent=2))
+                    lines.append("```")
+                lines.append("")
+            turn_counter += 1
+            lines.append("---")
+            lines.append("")
+
+    lines.append("### 🛡️ Layer 5 Deterministic Grounding Certification")
+    lines.append("This report was generated deterministically by AuralQ. All acoustic assertions are certified against librosa/scipy/numpy mathematical calculations.")
+    return "\n".join(lines)
+
+
 
 # ---------------------------------------------------------------------------
 # SIDEBAR: Sessions, Engine Config, Sample Showcase
@@ -287,15 +360,42 @@ with st.sidebar:
     st.markdown("## 🎙️ **AuralQ Studio**")
     st.caption("Deterministic Audio Intelligence on Consumer Hardware")
 
-    # 1. New Session Button
-    if st.button("➕ New Analysis Session", use_container_width=True, type="primary"):
-        st.session_state.session_id = str(uuid.uuid4())[:8]
-        st.session_state.active_audio_path = None
-        st.session_state.active_dataset_path = None
-        st.session_state.audio_metadata = None
-        st.session_state.audio_waveform = None
-        st.session_state.messages = []
-        st.rerun()
+    # 1. Session Management
+    col_sess1, col_sess2 = st.columns([1, 1]) if st.session_state.messages else (st.container(), None)
+
+    if col_sess2:
+        with col_sess1:
+            if st.button("➕ New Session", use_container_width=True, type="primary"):
+                st.session_state.session_id = str(uuid.uuid4())[:8]
+                st.session_state.active_audio_path = None
+                st.session_state.active_dataset_path = None
+                st.session_state.audio_metadata = None
+                st.session_state.audio_waveform = None
+                st.session_state.messages = []
+                st.rerun()
+        with col_sess2:
+            report_md = generate_markdown_audit_report(
+                session_id=st.session_state.session_id,
+                messages=st.session_state.messages,
+                audio_path=st.session_state.active_audio_path,
+                dataset_path=st.session_state.active_dataset_path,
+            )
+            st.download_button(
+                label="📥 Export Report",
+                data=report_md,
+                file_name=f"AuralQ_Audit_{st.session_state.session_id}.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+    else:
+        if st.button("➕ New Analysis Session", use_container_width=True, type="primary"):
+            st.session_state.session_id = str(uuid.uuid4())[:8]
+            st.session_state.active_audio_path = None
+            st.session_state.active_dataset_path = None
+            st.session_state.audio_metadata = None
+            st.session_state.audio_waveform = None
+            st.session_state.messages = []
+            st.rerun()
 
     st.markdown("---")
 

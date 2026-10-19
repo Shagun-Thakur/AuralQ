@@ -70,5 +70,15 @@ temp/
 logs/
 *.log
 
+# Local SQLite databases & session caches
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+
+# Streamlit secrets & local runtime credentials
+.streamlit/secrets.toml
+
+# Internal design & planning documents
 AGENT.md
 AuralQ_Technical_Blueprint.docx
