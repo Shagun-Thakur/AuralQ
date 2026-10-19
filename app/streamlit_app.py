@@ -178,11 +178,17 @@ st.markdown(DARK_STUDIO_CSS, unsafe_allow_html=True)
 # State Initialization
 # ---------------------------------------------------------------------------
 
+# Deployment environment detection: True when hosted on Streamlit Community Cloud
+IS_CLOUD_DEPLOYMENT = Path("/mount/src").exists()
+
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())[:8]
 
 if "engine_mode" not in st.session_state:
-    st.session_state.engine_mode = "🟢 Local Ollama (Private / Air-Gapped)"
+    if IS_CLOUD_DEPLOYMENT or not check_ollama_status():
+        st.session_state.engine_mode = "☁️ Cloud Demo Mode"
+    else:
+        st.session_state.engine_mode = "🟢 Local Ollama (Private / Air-Gapped)"
 
 if "selected_model" not in st.session_state:
     st.session_state.selected_model = "llama3.2:3b-instruct-q4_K_M"
@@ -462,40 +468,9 @@ with st.sidebar:
     st.markdown("---")
 
     # 3. Engine & Model Configuration
-    st.markdown("### ⚙️ Engine Selector")
-    engine_choice = st.radio(
-        "Execution Mode:",
-        ["🟢 Local Ollama (Private / Air-Gapped)", "☁️ Cloud Demo Mode"],
-        index=0 if is_local_engine else 1,
-    )
-    if engine_choice != st.session_state.engine_mode:
-        st.session_state.engine_mode = engine_choice
-        st.rerun()
-
-    if "Local Ollama" in st.session_state.engine_mode:
-        ollama_alive = check_ollama_status()
-        if ollama_alive:
-            st.caption("🟢 **Ollama Daemon**: Connected (`127.0.0.1:11434`)")
-            installed_models = get_installed_ollama_models()
-            if installed_models:
-                st.session_state.selected_model = st.selectbox(
-                    "Active Local Model:",
-                    installed_models,
-                    index=0,
-                )
-            else:
-                st.warning("No local models found.")
-                if st.button("⬇️ Pull `llama3.2:3b` (~2.0 GB)"):
-                    with st.spinner("Downloading model via Ollama..."):
-                        if pull_ollama_model("llama3.2:3b-instruct-q4_K_M"):
-                            st.success("Model downloaded successfully!")
-                            st.rerun()
-                        else:
-                            st.error("Failed to download model. Ensure Ollama is running.")
-        else:
-            st.error("⚠️ **Ollama is Offline**.\nPlease start Ollama locally or switch to Cloud Demo Mode.")
-    else:
-        st.caption("☁️ **Cloud Demo**: Runs using high-speed cloud LLM API")
+    if IS_CLOUD_DEPLOYMENT:
+        st.markdown("### ☁️ Cloud Demo Engine")
+        st.caption("Running publicly in ephemeral mode with cloud LLMs.")
         st.session_state.cloud_provider = st.selectbox("Provider:", ["gemini", "groq"])
 
         # Check if environment or Streamlit secrets has a default key
@@ -508,8 +483,8 @@ with st.sidebar:
             pass
 
         if server_key:
-            st.success(f"🔑 **Default `{env_var_name}` Detected**")
-            custom_key = st.text_input("Custom Key Override (Optional / Session RAM):", type="password", placeholder="Leave blank to use default key")
+            st.success(f"🔑 **Hosted `{env_var_name}` Connected**")
+            custom_key = st.text_input("Custom Key Override (Optional / Session RAM):", type="password", placeholder="Leave blank to use default host key")
             st.session_state.cloud_api_key = custom_key if custom_key else server_key
         else:
             st.caption(f"🔑 **No `{env_var_name}` configured on host**")
@@ -523,10 +498,97 @@ with st.sidebar:
             else:
                 st.session_state.cloud_api_key = ""
                 st.info(
-                    "💡 **No API Key?**\n"
+                    "💡 **API Key Required**\n"
                     "- Get a free key at [Google AI Studio](https://aistudio.google.com/) or [Groq Console](https://console.groq.com/).\n"
-                    "- Or switch back to **🟢 Local Ollama** above for 100% free, private local execution with zero keys!"
+                    "- Or clone and run locally for 100% free, private execution with zero keys!"
                 )
+
+        # Direct link to run on-premise with local Ollama
+        st.markdown("---")
+        with st.expander("🔒 Run 100% Air-Gapped with Local Ollama"):
+            st.markdown(
+                """
+                To analyze confidential audio on your machine with **Ollama** and zero cloud dependency:
+
+                1. **Clone the repository**:
+                   ```bash
+                   git clone https://github.com/Shagun-Thakur/AuralQ.git
+                   ```
+                2. **One-Click Launch**:
+                   - **Windows**: Double-click `run_auralq.bat`
+                   - **Linux/macOS**: Run `./run_auralq.sh`
+
+                Automatically connects to your local GPU & Ollama at `http://localhost:8501`.
+                """
+            )
+            st.link_button("🐙 Clone on GitHub", "https://github.com/Shagun-Thakur/AuralQ", use_container_width=True)
+    else:
+        # Local desktop workstation: Full dual-mode engine selector
+        st.markdown("### ⚙️ Engine Selector")
+        engine_choice = st.radio(
+            "Execution Mode:",
+            ["🟢 Local Ollama (Private / Air-Gapped)", "☁️ Cloud Demo Mode"],
+            index=0 if is_local_engine else 1,
+        )
+        if engine_choice != st.session_state.engine_mode:
+            st.session_state.engine_mode = engine_choice
+            st.rerun()
+
+        if "Local Ollama" in st.session_state.engine_mode:
+            ollama_alive = check_ollama_status()
+            if ollama_alive:
+                st.caption("🟢 **Ollama Daemon**: Connected (`127.0.0.1:11434`)")
+                installed_models = get_installed_ollama_models()
+                if installed_models:
+                    st.session_state.selected_model = st.selectbox(
+                        "Active Local Model:",
+                        installed_models,
+                        index=0,
+                    )
+                else:
+                    st.warning("No local models found.")
+                    if st.button("⬇️ Pull `llama3.2:3b` (~2.0 GB)"):
+                        with st.spinner("Downloading model via Ollama..."):
+                            if pull_ollama_model("llama3.2:3b-instruct-q4_K_M"):
+                                st.success("Model downloaded successfully!")
+                                st.rerun()
+                            else:
+                                st.error("Failed to download model. Ensure Ollama is running.")
+            else:
+                st.error("⚠️ **Ollama is Offline**.\nPlease start Ollama locally (`ollama serve`) or switch to Cloud Demo Mode.")
+        else:
+            st.caption("☁️ **Cloud Demo**: Runs using high-speed cloud LLM API")
+            st.session_state.cloud_provider = st.selectbox("Provider:", ["gemini", "groq"])
+
+            # Check if environment or Streamlit secrets has a default key
+            env_var_name = "GEMINI_API_KEY" if st.session_state.cloud_provider == "gemini" else "GROQ_API_KEY"
+            server_key = os.environ.get(env_var_name)
+            try:
+                if not server_key and hasattr(st, "secrets"):
+                    server_key = st.secrets.get(env_var_name)
+            except Exception:
+                pass
+
+            if server_key:
+                st.success(f"🔑 **Default `{env_var_name}` Detected**")
+                custom_key = st.text_input("Custom Key Override (Optional / Session RAM):", type="password", placeholder="Leave blank to use default key")
+                st.session_state.cloud_api_key = custom_key if custom_key else server_key
+            else:
+                st.caption(f"🔑 **No `{env_var_name}` configured on host**")
+                custom_key = st.text_input(
+                    f"Enter {st.session_state.cloud_provider.title()} API Key:",
+                    type="password",
+                    placeholder="AIzaSy... (Gemini) or gsk_... (Groq)",
+                )
+                if custom_key:
+                    st.session_state.cloud_api_key = custom_key
+                else:
+                    st.session_state.cloud_api_key = ""
+                    st.info(
+                        "💡 **No API Key?**\n"
+                        "- Get a free key at [Google AI Studio](https://aistudio.google.com/) or [Groq Console](https://console.groq.com/).\n"
+                        "- Or switch back to **🟢 Local Ollama** above for 100% free, private local execution with zero keys!"
+                    )
 
     st.markdown("---")
 
