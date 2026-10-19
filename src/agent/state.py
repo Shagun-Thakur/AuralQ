@@ -54,12 +54,16 @@ class SessionState:
         self.audio_metadata = metadata
         self.waveform = waveform
         self.sr = sr
+        self.dataset_path = None
         # Invalidate tool cache when a new audio file is loaded
         self._tool_cache.clear()
 
     def set_dataset(self, path: str) -> None:
         """Set or update the active dataset path, clearing dataset tool cache."""
         self.dataset_path = path
+        self.audio_metadata = None
+        self.waveform = None
+        self.sr = None
         # Invalidate dataset profiler cache entries
         keys_to_delete = [k for k in self._tool_cache if "dataset_profiler" in k]
         for k in keys_to_delete:

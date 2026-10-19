@@ -82,6 +82,14 @@ class AuralQAgent:
         """
         t_total_start = time.perf_counter()
 
+        # Step 0: Auto-detect existing directory in query if no inputs provided
+        if not dataset_path and not audio_path:
+            for token in question.split():
+                clean_tok = token.strip("`'\".,:;()")
+                if ("/" in clean_tok or "\\" in clean_tok) and Path(clean_tok).exists() and Path(clean_tok).is_dir():
+                    dataset_path = clean_tok
+                    break
+
         # Step 1: Handle input overrides if passed
         if audio_path:
             load_res = self.load_audio(audio_path)
@@ -154,16 +162,25 @@ class AuralQAgent:
 
         intent = llm_res.parsed_intent
 
-        # Heuristic guarantee for dataset audit queries:
-        # If an active dataset is registered, the query asks for an audit/report,
-        # and no tools were selected, guarantee dataset_profiler is dispatched.
-        if active_ds and not intent.selected_tools and not intent.is_abstention:
-            q_lower = question.lower()
-            if any(k in q_lower for k in ["audit", "dataset", "profile", "preprocess", "clean", "report", "hygiene"]):
-                intent.selected_tools.append(ToolCallIntent(
+        # Dataset mode enforcement:
+        # When an active dataset directory is registered (or the query is about a dataset),
+        # all acoustic inquiries on the dataset MUST execute dataset_profiler.
+        q_lower = question.lower()
+        is_dataset_query = (
+            bool(active_ds)
+            or "dataset" in q_lower
+            or "preprocessing" in q_lower
+            or "directory" in q_lower
+            or "audit" in q_lower
+        )
+        if active_ds and is_dataset_query:
+            intent.is_abstention = False
+            has_profiler = any(tc.tool_name == "dataset_profiler" for tc in intent.selected_tools)
+            if not has_profiler:
+                intent.selected_tools = [ToolCallIntent(
                     tool_name="dataset_profiler",
                     parameters={"dataset_path": active_ds},
-                ))
+                )]
 
         # Step 3: Fast-path for Abstention
         if intent.is_abstention:
