@@ -9,9 +9,15 @@ and verifiable deterministic citation traces.
 import io
 import json
 import os
+import sys
 import time
 import uuid
 from pathlib import Path
+
+# Ensure project root is in sys.path for cloud deployment
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from typing import Any, Dict, List, Optional
 
