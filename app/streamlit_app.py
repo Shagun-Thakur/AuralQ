@@ -508,20 +508,20 @@ with st.sidebar:
         with st.expander("🔒 Run 100% Air-Gapped with Local Ollama"):
             st.markdown(
                 """
-                To analyze confidential audio on your machine with **Ollama** and zero cloud dependency:
+                To analyze confidential audio on your own computer with **Ollama** and zero cloud dependency:
 
-                1. **Clone the repository**:
-                   ```bash
-                   git clone https://github.com/Shagun-Thakur/AuralQ.git
-                   ```
-                2. **One-Click Launch**:
-                   - **Windows**: Double-click `run_auralq.bat`
-                   - **Linux/macOS**: Run `./run_auralq.sh`
+                1. **Get the code on your computer**:
+                   - Via Git: `git clone https://github.com/Shagun-Thakur/AuralQ.git`
+                   - Or open the GitHub link below and click **Code → Download ZIP**.
+                2. **Run it locally on your PC**:
+                   - Open the folder in **Windows File Explorer** (`C:\\...\\AuralQ`).
+                   - Double-click the file **`run_auralq.bat`** (or run `.\\run_auralq.bat` in Terminal).
+                   - *(Linux/macOS: `./run_auralq.sh`)*
 
-                Automatically connects to your local GPU & Ollama at `http://localhost:8501`.
+                AuralQ will open in your browser at `http://localhost:8501`, connected to your local GPU & Ollama with 100% air-gapped privacy!
                 """
             )
-            st.link_button("🐙 Clone on GitHub", "https://github.com/Shagun-Thakur/AuralQ", use_container_width=True)
+            st.link_button("🐙 Open Repository on GitHub", "https://github.com/Shagun-Thakur/AuralQ", use_container_width=True)
     else:
         # Local desktop workstation: Full dual-mode engine selector
         st.markdown("### ⚙️ Engine Selector")
