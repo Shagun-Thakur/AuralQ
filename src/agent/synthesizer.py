@@ -77,7 +77,7 @@ class ResponseSynthesizer:
             )
             synthesis_time_ms = round((time.perf_counter() - t_start) * 1000, 2)
             raw_text = res_json.get("response", "").strip()
-            if raw_text:
+            if raw_text and not raw_text.startswith("Cloud API error"):
                 return raw_text, synthesis_time_ms
         except Exception:
             # Fall back to deterministic template synthesis on any LLM connection issue

@@ -57,42 +57,63 @@ class CloudClient:
 
 
         if self.provider == "gemini":
-            self.model_name = model_name or "gemini-2.5-flash"
+            self.model_name = model_name or "gemini-2.0-flash"
         elif self.provider == "groq":
             self.model_name = model_name or "llama-3.1-8b-instant"
         else:
             self.model_name = model_name or "default"
 
     def _call_gemini_rest(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """Call Google Gemini REST API directly via standard library."""
+        """Call Google Gemini REST API directly via standard library with automatic model fallback."""
         if not self.api_key:
             raise ValueError("No Gemini API key provided. Please supply an API key in the Cloud Demo settings.")
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
-        body: Dict[str, Any] = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "temperature": 0.0,
-                "responseMimeType": "application/json" if "JSON" in (system_prompt or "") else "text/plain",
-            },
-        }
-        if system_prompt:
-            body["systemInstruction"] = {"parts": [{"text": system_prompt}]}
+        # Candidate models to try: gemini-2.0-flash is universally available across all free and paid tiers
+        candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+        if self.model_name and self.model_name not in candidate_models:
+            candidate_models.insert(0, self.model_name)
 
-        req_data = json.dumps(body).encode("utf-8")
-        req = urllib.request.Request(
-            url,
-            data=req_data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            candidates = data.get("candidates", [])
-            if candidates and "content" in candidates[0]:
-                parts = candidates[0]["content"].get("parts", [])
-                if parts and "text" in parts[0]:
-                    return parts[0]["text"]
+        last_error = None
+        for model in candidate_models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
+            body: Dict[str, Any] = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.0,
+                    "responseMimeType": "application/json" if "JSON" in (system_prompt or "") else "text/plain",
+                },
+            }
+            if system_prompt:
+                body["systemInstruction"] = {"parts": [{"text": system_prompt}]}
+
+            req_data = json.dumps(body).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=req_data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    candidates = data.get("candidates", [])
+                    if candidates and "content" in candidates[0]:
+                        parts = candidates[0]["content"].get("parts", [])
+                        if parts and "text" in parts[0]:
+                            self.model_name = model  # Lock to the successful model
+                            return parts[0]["text"]
+            except urllib.error.HTTPError as http_err:
+                last_error = http_err
+                # If model not found (404), forbidden (403), or invalid argument (400), try next candidate
+                if http_err.code in (400, 403, 404):
+                    continue
+                raise http_err
+            except Exception as e:
+                last_error = e
+                continue
+
+        if last_error:
+            raise last_error
         raise RuntimeError("Empty response received from Gemini API.")
 
     def _call_groq_rest(self, prompt: str, system_prompt: Optional[str] = None) -> str:
