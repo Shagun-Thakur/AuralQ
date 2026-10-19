@@ -103,13 +103,14 @@ class OllamaClient:
         self,
         question: str,
         audio_metadata: Optional[Dict[str, Any]] = None,
+        dataset_path: Optional[str] = None,
     ) -> OllamaResponse:
         """
         Parse user question into single-shot tool intent with self-healing validation retry.
         Guarantees structured output or explicit error status.
         """
         system_prompt = build_system_prompt()
-        user_prompt = build_user_prompt(question, audio_metadata=audio_metadata)
+        user_prompt = build_user_prompt(question, audio_metadata=audio_metadata, dataset_path=dataset_path)
         current_prompt = user_prompt
         current_system = system_prompt
 

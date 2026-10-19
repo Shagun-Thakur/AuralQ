@@ -65,7 +65,7 @@ class SpectrogramArgs(BaseToolArgs):
 
 class DatasetProfileArgs(BaseToolArgs):
     """Arguments for dataset profiling and preprocessing recommendation."""
-    dataset_path: str = Field(description="Directory path containing the audio dataset.")
+    dataset_path: Optional[str] = Field(default=None, description="Directory path containing the audio dataset.")
     target_sr: Optional[int] = Field(default=22050, ge=8000, le=48000)
     max_files: int = Field(default=2000, ge=1, le=5000)
 

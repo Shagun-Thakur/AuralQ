@@ -148,11 +148,12 @@ class CloudClient:
         self,
         query: str,
         audio_metadata: Optional[Dict[str, Any]] = None,
+        dataset_path: Optional[str] = None,
         max_retries: int = 1,
     ) -> OllamaResponse:
         """Parse acoustic intent into IntentParseResult matching OllamaClient interface."""
         t_start = time.perf_counter()
-        user_prompt = build_user_prompt(query, audio_metadata)
+        user_prompt = build_user_prompt(query, audio_metadata, dataset_path=dataset_path)
         system_prompt = build_system_prompt()
 
         for attempt in range(max_retries + 1):

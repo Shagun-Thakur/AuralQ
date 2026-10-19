@@ -12,6 +12,7 @@ from src.agent.validator import CitationValidator
 from src.audio.loader import AudioLoadResult, load_audio_file
 from src.audio.validation import AudioMetadata
 from src.llm.client import OllamaClient
+from src.llm.schemas import ToolCallIntent
 from src.tools.schemas import ToolResultModel
 
 
@@ -118,7 +119,12 @@ class AuralQAgent:
             meta_dict = self.session_state.audio_metadata.to_context_dict()
 
         t_intent_start = time.perf_counter()
-        llm_res = self.client.parse_intent(question, audio_metadata=meta_dict)
+        active_ds = self.session_state.dataset_path
+        llm_res = self.client.parse_intent(
+            question,
+            audio_metadata=meta_dict,
+            dataset_path=active_ds,
+        )
         intent_ms = round((time.perf_counter() - t_intent_start) * 1000, 2)
 
         if not llm_res.is_valid or llm_res.parsed_intent is None:
@@ -147,6 +153,17 @@ class AuralQAgent:
             )
 
         intent = llm_res.parsed_intent
+
+        # Heuristic guarantee for dataset audit queries:
+        # If an active dataset is registered, the query asks for an audit/report,
+        # and no tools were selected, guarantee dataset_profiler is dispatched.
+        if active_ds and not intent.selected_tools and not intent.is_abstention:
+            q_lower = question.lower()
+            if any(k in q_lower for k in ["audit", "dataset", "profile", "preprocess", "clean", "report", "hygiene"]):
+                intent.selected_tools.append(ToolCallIntent(
+                    tool_name="dataset_profiler",
+                    parameters={"dataset_path": active_ds},
+                ))
 
         # Step 3: Fast-path for Abstention
         if intent.is_abstention:
