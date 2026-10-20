@@ -38,9 +38,17 @@ CRITICAL ARCHITECTURAL RULES:
 2. Select ONLY tools from the registered tool catalogue below. Never invent tool names.
 3. Select the MINIMUM SUFFICIENT set of tools needed to answer the question. Maximum 3 tools per query.
 4. If a question asks about multiple properties (e.g. loudness AND brightness), include all required tools (up to 3).
-5. If the query asks about auditing, profiling, or preprocessing a dataset or directory (e.g. 'audit this dataset', 'profile dataset', 'recommend preprocessing', 'give report'), you MUST select the `dataset_profiler` tool. If an active dataset directory is available in DATASET CONTEXT, use that path or pass an empty parameters dictionary `{}` (the system will automatically resolve the active dataset path).
-6. If the question cannot be answered by acoustic signal processing (e.g. asking for singer identity, song lyrics, medical diagnosis, or general trivia unrelated to audio physics), set "is_abstention": true and provide a clear "abstention_reason".
-   IMPORTANT: Qualitative acoustic questions (such as whether sound is white noise hiss vs pure musical tones, bright vs dull, smooth vs percussive, loud vs quiet) ARE acoustic signal processing questions and MUST map to registered tools (`spectral_flatness`, `spectral_centroid`, `zero_crossing_rate`, `rms_energy`). Do NOT abstain on acoustic characteristics.
+5. DATASET AUDITING VS SINGLE-TRACK REMEDIATION:
+   - If the query asks about auditing, profiling, or preprocessing a multi-file DATASET or directory (e.g. 'audit this dataset', 'profile dataset', 'dataset preprocessing pipeline', 'give dataset report'), select the `dataset_profiler` tool.
+   - If the query asks about cleaning, filtering, fixing, or preprocessing a SINGLE AUDIO RECORDING (e.g. 'what preprocessing steps to reduce noise?', 'how should I clean this audio?', 'what filter to use?'), do NOT select `dataset_profiler`! Instead, select the single-audio diagnostic tools: `spectral_flatness` (noise profile), `snr_estimate` (signal-to-noise ratio), `rms_energy` (loudness/headroom), and/or `spectral_centroid` (frequency balance).
+6. APPLIED AUDIO USE-CASE QUESTIONS ARE VALID (DO NOT ABSTAIN):
+   - Questions evaluating an audio recording for a practical use-case (e.g. 'Can I use this for a vlog background?', 'Is this suitable for a podcast intro?', 'Will this clash with speech?', 'Is this audio clean enough for voiceover?') ARE acoustic engineering questions and MUST NOT be abstained.
+   - Select the tools that measure the physical properties determining suitability:
+     * Background audio / speech masking: Select `rms_energy` (for dialogue masking headroom) and `spectral_centroid` (for treble clashing with speech sibilance).
+     * Noise reduction / cleaning recommendations: Select `spectral_flatness` and `snr_estimate`.
+     * Vocal register / melody: Select `pitch_yin`.
+     * Percussive transients / alarms: Select `zero_crossing_rate` and `spectral_centroid`.
+   - SET "is_abstention": true ONLY if the question has NO connection to audio physics or sound engineering (e.g. asking for artist identity, lyric meanings, medical diagnoses, stock predictions, cooking recipes, or general non-audio trivia).
 7. You must respond in STRICT VALID JSON format conforming to the schema below. No conversational prose outside the JSON.
 
 OUTPUT JSON SCHEMA:

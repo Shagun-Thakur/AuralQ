@@ -190,18 +190,14 @@ class AuralQAgent:
 
         intent = llm_res.parsed_intent
 
-        # Dataset mode enforcement:
-        # When an active dataset directory is registered (or the query is about a dataset),
-        # all acoustic inquiries on the dataset MUST execute dataset_profiler.
+        # Dataset mode enforcement & single-track safeguard:
         q_lower = question.lower()
         is_dataset_query = (
-            bool(active_ds)
-            or "dataset" in q_lower
-            or "preprocessing" in q_lower
+            "dataset" in q_lower
             or "directory" in q_lower
-            or "audit" in q_lower
+            or ("audit" in q_lower and "file" not in q_lower and "track" not in q_lower)
         )
-        if active_ds and is_dataset_query:
+        if active_ds and (is_dataset_query or not self.session_state.waveform):
             intent.is_abstention = False
             has_profiler = any(tc.tool_name == "dataset_profiler" for tc in intent.selected_tools)
             if not has_profiler:
@@ -209,6 +205,25 @@ class AuralQAgent:
                     tool_name="dataset_profiler",
                     parameters={"dataset_path": active_ds},
                 )]
+
+        # Safeguard: if dataset_profiler was selected but no dataset is registered
+        # and a single audio waveform is active, replace with single-file diagnostic tools
+        resolved_tools = []
+        for tc in intent.selected_tools:
+            if tc.tool_name == "dataset_profiler":
+                ds_candidate = (
+                    self.session_state.dataset_path
+                    or tc.parameters.get("dataset_path")
+                    or (self.session_state.audio_metadata.file_path if (self.session_state.audio_metadata and Path(self.session_state.audio_metadata.file_path).is_dir()) else None)
+                )
+                if not ds_candidate and self.session_state.waveform is not None:
+                    # Single audio file active: convert to single-track noise & quality diagnostics
+                    resolved_tools.append(ToolCallIntent(tool_name="spectral_flatness", parameters={}))
+                    resolved_tools.append(ToolCallIntent(tool_name="rms_energy", parameters={}))
+                    resolved_tools.append(ToolCallIntent(tool_name="snr_estimate", parameters={}))
+                    continue
+            resolved_tools.append(tc)
+        intent.selected_tools = resolved_tools[:3]
 
         # Step 3: Fast-path for Abstention
         if intent.is_abstention:
@@ -270,6 +285,9 @@ class AuralQAgent:
                 elif not args_dict.get("dataset_path") or not Path(str(args_dict["dataset_path"])).exists():
                     if self.session_state.audio_metadata and Path(self.session_state.audio_metadata.file_path).is_dir():
                         args_dict["dataset_path"] = self.session_state.audio_metadata.file_path
+                if not args_dict.get("dataset_path") or not Path(str(args_dict["dataset_path"])).is_dir():
+                    # No directory path available for dataset profiling; skip execution to prevent TypeError
+                    continue
 
             # Check cache
             cached_res = self.session_state.get_cached_tool_result(tool_name, args_dict)

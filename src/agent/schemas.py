@@ -69,7 +69,7 @@ class CitationMatch(BaseModel):
     raw_token: str = Field(description="The exact numeric substring extracted from the response.")
     parsed_value: Optional[float] = Field(default=None, description="Numeric float representation of token.")
     matched_metric: Optional[str] = Field(default=None, description="Canonical metric or alias this matched against.")
-    match_type: Literal["exact_alias", "tolerance_metric", "metadata", "query_echo"] = "exact_alias"
+    match_type: Literal["exact_alias", "tolerance_metric", "metadata", "query_echo", "engineering_reference"] = "exact_alias"
     is_grounded: bool = True
 
 

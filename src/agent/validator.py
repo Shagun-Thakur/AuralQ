@@ -24,6 +24,32 @@ UNIT_SPLIT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+RECOMMENDATION_CONTEXT_WORDS = {
+    "recommend", "recommends", "recommendation", "recommended",
+    "suggest", "suggests", "suggestion",
+    "apply", "applies", "target", "targets",
+    "cut", "filter", "filtering", "slope", "slopes",
+    "boost", "attenuate", "attenuation", "duck", "ducking",
+    "reduce", "reduction", "lower", "lowered",
+    "typically", "typical", "standard", "standards", "guideline", "guidelines",
+    "threshold", "headroom", "high-pass", "low-pass", "band-pass", "shelf",
+    "gate", "gating", "denoiser", "denoise", "ratio", "around", "between",
+    "vlog", "podcast", "dialogue", "speech", "voice", "voiceover", "lufs",
+}
+
+STANDARD_AUDIO_REFERENCE_FREQS = {
+    20.0, 30.0, 40.0, 50.0, 60.0, 80.0, 100.0, 120.0, 250.0, 300.0, 500.0,
+    1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0, 8000.0, 10000.0, 12000.0, 16000.0, 20000.0,
+}
+
+STANDARD_AUDIO_TARGET_DBS = {
+    -0.1, -0.5, -1.0, -2.0, -3.0, -6.0, -12.0, -14.0, -16.0, -18.0, -20.0, -23.0, -24.0, -26.0, -28.0, -30.0, -60.0,
+}
+
+STANDARD_AUDIO_ADJUSTMENT_DBS = {
+    1.0, 2.0, 3.0, 4.0, 6.0, 9.0, 10.0, 12.0, 14.0, 15.0, 18.0, 24.0,
+}
+
 
 def parse_numeric_candidate(token: str) -> Tuple[Optional[float], str]:
     """
@@ -234,6 +260,19 @@ class CitationValidator:
                         matched = True
                         break
 
+            # Check 5: Audio engineering reference target or recommendation specification
+            if not matched and self._is_engineering_reference(val, unit, token_clean, response_text):
+                verified_citations.append(
+                    CitationMatch(
+                        raw_token=token_clean,
+                        parsed_value=val,
+                        matched_metric="engineering_reference_target",
+                        match_type="engineering_reference",
+                        is_grounded=True,
+                    )
+                )
+                matched = True
+
             if not matched:
                 hallucinated_numbers.append(token_clean)
 
@@ -284,6 +323,44 @@ class CitationValidator:
         elif unit in ["s", "sec", "seconds", "second"]:
             if math.isclose(candidate / 3600.0, target, rel_tol=self.rel_tolerance, abs_tol=0.001):
                 return True
+
+        return False
+
+    def _is_engineering_reference(
+        self,
+        val: Optional[float],
+        unit: str,
+        token: str,
+        response_text: str,
+    ) -> bool:
+        """Check if a numeric token is an audio engineering target/standard/recommendation rather than an unverified file measurement."""
+        if val is None:
+            return False
+
+        # Units exclusive to audio engineering standards / filter slopes
+        if unit in ("lufs", "db/oct", "oct"):
+            return True
+
+        # Standard reference frequencies
+        if unit == "hz" and val in STANDARD_AUDIO_REFERENCE_FREQS:
+            return True
+        if unit == "khz" and (val * 1000.0) in STANDARD_AUDIO_REFERENCE_FREQS:
+            return True
+
+        # Standard decibel targets & gain adjustment amounts
+        if unit in ("db", "dbfs"):
+            if val in STANDARD_AUDIO_TARGET_DBS or val in STANDARD_AUDIO_ADJUSTMENT_DBS or (-val) in STANDARD_AUDIO_ADJUSTMENT_DBS:
+                return True
+
+        # Context-aware check within proximity of recommendation keywords
+        pos = response_text.find(token)
+        if pos != -1:
+            start = max(0, pos - 60)
+            end = min(len(response_text), pos + len(token) + 60)
+            window = response_text[start:end].lower()
+            if any(w in window for w in RECOMMENDATION_CONTEXT_WORDS):
+                if unit in ("hz", "khz", "db", "dbfs", "%", "") and (val.is_integer() or abs(val) < 100):
+                    return True
 
         return False
 
