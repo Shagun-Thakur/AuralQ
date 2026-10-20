@@ -60,7 +60,10 @@ echo [INFO] Launching AuralQ Studio at http://localhost:8501...
 echo [INFO] (Keep this terminal window open while using AuralQ. Press Ctrl+C to stop)
 echo.
 
-%PY_CMD% -m streamlit run app/streamlit_app.py --server.port 8501 --server.headless false
+:: Pop open the user's browser in Windows
+start "" http://localhost:8501
+
+%PY_CMD% -m streamlit run app/streamlit_app.py --server.port 8501
 
 if %ERRORLEVEL% neq 0 (
     echo.
