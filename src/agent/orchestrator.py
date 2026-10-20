@@ -137,6 +137,23 @@ class AuralQAgent:
 
         if not llm_res.is_valid or llm_res.parsed_intent is None:
             err_msg = llm_res.error_message or "Unknown LLM intent parsing error"
+
+            # Format friendly, actionable quota / rate limit explanation if 429 occurs
+            is_quota_error = any(indicator in err_msg for indicator in ("429", "Too Many Requests", "RESOURCE_EXHAUSTED", "quota"))
+            if is_quota_error:
+                response_text = (
+                    "⚠️ **Hosted Cloud API Quota Exhausted (HTTP 429: Too Many Requests)**\n\n"
+                    "The shared rate limit or quota for the hosted cloud API key has been temporarily reached.\n\n"
+                    "**How you can continue:**\n"
+                    "1. 🔒 **Switch to the Local App (Recommended)**: Run AuralQ locally on your computer using Ollama for "
+                    "**unlimited queries, permanent session history, and 100% air-gapped privacy** with zero API keys. "
+                    "Simply double-click `run_auralq.bat` (or `./run_auralq.sh` on macOS/Linux).\n"
+                    "2. 🔑 **Use Your Own API Key**: Enter your personal free Gemini or Groq API key in the sidebar under "
+                    "**Cloud Demo Engine** to continue querying in this web session."
+                )
+            else:
+                response_text = f"I was unable to interpret the acoustic intent for this query: {err_msg}"
+
             evidence = EvidencePackage(
                 query=question,
                 status="TOOL_FAILURE",
@@ -147,7 +164,7 @@ class AuralQAgent:
                 timestamp=time.time(),
                 query=question,
                 evidence=evidence,
-                response_text=f"I was unable to interpret the acoustic intent for this query: {err_msg}",
+                response_text=response_text,
                 latency_breakdown={"intent_ms": intent_ms, "total_ms": round((time.perf_counter() - t_total_start) * 1000, 2)},
             )
             self.session_state.add_turn(turn)

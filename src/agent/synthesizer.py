@@ -70,6 +70,7 @@ class ResponseSynthesizer:
         t_start = time.perf_counter()
         prompt = self.build_synthesis_prompt(query, evidence, history_context)
 
+        raw_text = ""
         try:
             res_json = self.client.generate_text(
                 prompt=prompt,
@@ -86,6 +87,15 @@ class ResponseSynthesizer:
         # Deterministic fallback synthesis
         synthesis_time_ms = round((time.perf_counter() - t_start) * 1000, 2)
         fallback_text = self._deterministic_fallback_synthesis(evidence)
+
+        # Disclose quota warning cleanly without raw numeric digits (so citation validator is not affected)
+        if any(tok in raw_text for tok in ("429", "Too Many Requests", "RESOURCE_EXHAUSTED")):
+            fallback_text += (
+                "\n\n*⚠️ Note: Cloud LLM quota limit reached. "
+                "This response was deterministically synthesized from verified DSP measurements. "
+                "Supply your own key in the sidebar or run locally via `run_auralq.bat` for unlimited AI explanations.*"
+            )
+
         return fallback_text, synthesis_time_ms
 
     def _format_dataset_profile_report(self, evidence: EvidencePackage) -> str:

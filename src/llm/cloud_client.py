@@ -108,8 +108,8 @@ class CloudClient:
                             return combined_text
             except urllib.error.HTTPError as http_err:
                 last_error = http_err
-                # If model not found (404), forbidden (403), or invalid argument (400), try next candidate
-                if http_err.code in (400, 403, 404):
+                # If model not found (404), forbidden (403), invalid argument (400), or rate-limited (429), try next candidate model
+                if http_err.code in (400, 403, 404, 429):
                     continue
                 raise http_err
             except Exception as e:
