@@ -7,6 +7,9 @@ echo "  Deterministic Signal Processing with Grounded AI"
 echo "======================================================="
 echo ""
 
+# Navigate to script directory
+cd "$(dirname "$0")" || exit 1
+
 # 1. Activate virtual environment if available
 if [ -f ".venv/bin/activate" ]; then
     echo "[INFO] Activating virtual environment (.venv)..."
@@ -22,11 +25,15 @@ if curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
     echo "[OK] Ollama daemon is running and reachable."
 else
     echo "[WARNING] Ollama is not detected at http://127.0.0.1:11434"
+    echo "[WARNING] Local models will be unavailable until Ollama is started."
     echo "[WARNING] You can still use Cloud Demo Mode in the sidebar."
 fi
 echo ""
 
 # 3. Launch Streamlit Cockpit
 echo "[INFO] Launching AuralQ Studio in your default browser..."
-streamlit run app/streamlit_app.py
-
+if command -v python3 &> /dev/null; then
+    python3 -m streamlit run app/streamlit_app.py
+else
+    streamlit run app/streamlit_app.py
+fi
