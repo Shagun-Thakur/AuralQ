@@ -138,8 +138,10 @@ class AuralQAgent:
         if not llm_res.is_valid or llm_res.parsed_intent is None:
             err_msg = llm_res.error_message or "Unknown LLM intent parsing error"
 
-            # Format friendly, actionable quota / rate limit explanation if 429 occurs
+            # Format friendly, actionable explanation if 429 (quota) or 503 (service unavailable) occurs
             is_quota_error = any(indicator in err_msg for indicator in ("429", "Too Many Requests", "RESOURCE_EXHAUSTED", "quota"))
+            is_service_unavailable = any(indicator in err_msg for indicator in ("503", "Service Unavailable", "502", "504", "overloaded"))
+
             if is_quota_error:
                 response_text = (
                     "⚠️ **Hosted Cloud API Quota Exhausted (HTTP 429: Too Many Requests)**\n\n"
@@ -150,6 +152,15 @@ class AuralQAgent:
                     "Simply double-click `run_auralq.bat` (or `./run_auralq.sh` on macOS/Linux).\n"
                     "2. 🔑 **Use Your Own API Key**: Enter your personal free Gemini or Groq API key in the sidebar under "
                     "**Cloud Demo Engine** to continue querying in this web session."
+                )
+            elif is_service_unavailable:
+                response_text = (
+                    "⚠️ **Cloud AI Service Temporarily Overloaded (HTTP 503: Service Unavailable)**\n\n"
+                    "Google's cloud AI servers are currently experiencing high traffic, transient model overload, or temporary downtime.\n\n"
+                    "**How you can continue immediately:**\n"
+                    "1. 🔒 **Switch to Local Mode (Recommended)**: Run AuralQ locally on your machine with Ollama for **100% offline, zero-downtime, and private execution**. "
+                    "Simply double-click `run_auralq.bat` (or `./run_auralq.sh` on macOS/Linux).\n"
+                    "2. ⚡ **Switch Provider or Retry**: In the sidebar under **Cloud Demo Engine**, try switching from Gemini to Groq (or vice-versa), or retry your query in a few moments."
                 )
             else:
                 response_text = f"I was unable to interpret the acoustic intent for this query: {err_msg}"

@@ -88,12 +88,18 @@ class ResponseSynthesizer:
         synthesis_time_ms = round((time.perf_counter() - t_start) * 1000, 2)
         fallback_text = self._deterministic_fallback_synthesis(evidence)
 
-        # Disclose quota warning cleanly without raw numeric digits (so citation validator is not affected)
+        # Disclose quota or service warning cleanly without raw numeric digits (so citation validator is not affected)
         if any(tok in raw_text for tok in ("429", "Too Many Requests", "RESOURCE_EXHAUSTED")):
             fallback_text += (
                 "\n\n*⚠️ Note: Cloud LLM quota limit reached. "
                 "This response was deterministically synthesized from verified DSP measurements. "
                 "Supply your own key in the sidebar or run locally via `run_auralq.bat` for unlimited AI explanations.*"
+            )
+        elif any(tok in raw_text for tok in ("503", "Service Unavailable", "502", "504", "overloaded")):
+            fallback_text += (
+                "\n\n*⚠️ Note: Cloud AI servers are temporarily experiencing high traffic. "
+                "This response was deterministically synthesized from verified DSP measurements. "
+                "Run locally via `run_auralq.bat` for guaranteed zero-downtime execution.*"
             )
 
         return fallback_text, synthesis_time_ms

@@ -69,7 +69,7 @@ class CloudClient:
             raise ValueError("No Gemini API key provided. Please supply an API key in the Cloud Demo settings.")
 
         # Candidate models to try: gemini-2.0-flash is universally available across all free and paid tiers
-        candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+        candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.5-flash"]
         if self.model_name and self.model_name not in candidate_models:
             candidate_models.insert(0, self.model_name)
 
@@ -108,8 +108,8 @@ class CloudClient:
                             return combined_text
             except urllib.error.HTTPError as http_err:
                 last_error = http_err
-                # If model not found (404), forbidden (403), invalid argument (400), or rate-limited (429), try next candidate model
-                if http_err.code in (400, 403, 404, 429):
+                # If model not found (404), forbidden (403), invalid argument (400), rate-limited (429), or server overloaded/down (500, 502, 503, 504), try next candidate model
+                if http_err.code in (400, 403, 404, 429, 500, 502, 503, 504):
                     continue
                 raise http_err
             except Exception as e:
