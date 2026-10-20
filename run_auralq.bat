@@ -56,11 +56,11 @@ if %ERRORLEVEL% neq 0 (
 )
 
 REM 4. Launch Streamlit Cockpit
-echo [INFO] Launching AuralQ Studio in your default browser...
-echo [INFO] (Keep this window open while using AuralQ. Press Ctrl+C to stop)
+echo [INFO] Launching AuralQ Studio at http://localhost:8501...
+echo [INFO] (Keep this terminal window open while using AuralQ. Press Ctrl+C to stop)
 echo.
 
-%PY_CMD% -m streamlit run app/streamlit_app.py
+%PY_CMD% -m streamlit run app/streamlit_app.py --server.port 8501 --server.headless false
 
 if %ERRORLEVEL% neq 0 (
     echo.
