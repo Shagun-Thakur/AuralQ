@@ -153,23 +153,116 @@ class ResponseSynthesizer:
         if any(k.startswith("dataset_profiler.") for k in evidence.consolidated_metrics):
             return self._format_dataset_profile_report(evidence)
 
-        # Report perceptual anchors
+        # Report perceptual anchors cleanly without duplicate key/value dumps
         if evidence.consolidated_anchors:
-            anchor_strs = [f"{k}: '{v}'" for k, v in evidence.consolidated_anchors.items()]
-            lines.append(f"Acoustic assessment indicates {', '.join(anchor_strs)}.")
+            grounded_terms = [v for k, v in evidence.consolidated_anchors.items() if k.endswith(".grounded_term")]
+            if grounded_terms:
+                unique_terms = list(dict.fromkeys(grounded_terms))
+                lines.append(f"Acoustic assessment indicates the audio is characterized as **{', '.join(unique_terms)}**.")
+            else:
+                unique_vals = list(dict.fromkeys(evidence.consolidated_anchors.values()))
+                lines.append(f"Acoustic assessment indicates the audio is characterized as **{', '.join(unique_vals)}**.")
 
-        # Report measured metrics cleanly (skipping raw dict dumps)
-        if evidence.consolidated_metrics:
-            metric_strs = []
-            for k, v in evidence.consolidated_metrics.items():
-                if isinstance(v, (int, float, str, bool)):
-                    metric_strs.append(f"{k} = {v}")
-                elif isinstance(v, dict):
-                    inner = ", ".join(f"{subk}={subv}" for subk, subv in v.items() if isinstance(subv, (int, float, str, bool)))
-                    if inner:
-                        metric_strs.append(f"{k} = {{{inner}}}")
-            if metric_strs:
-                lines.append(f"Measured values: {', '.join(metric_strs)}.")
+        # Report measured metrics cleanly with proper units
+        metrics = evidence.consolidated_metrics
+        if metrics:
+            metric_descriptions = []
+            handled_keys = set()
+
+            # 1. Spectral Centroid
+            if any(k.startswith("spectral_centroid.") for k in metrics):
+                mean_hz = metrics.get("spectral_centroid.mean_hz") or metrics.get("spectral_centroid.mean_centroid_hz")
+                med_hz = metrics.get("spectral_centroid.median_hz") or metrics.get("spectral_centroid.median_centroid_hz")
+                std_hz = metrics.get("spectral_centroid.std_hz") or metrics.get("spectral_centroid.std_centroid_hz")
+                handled_keys.update({"spectral_centroid.mean_hz", "spectral_centroid.mean_centroid_hz",
+                                     "spectral_centroid.median_hz", "spectral_centroid.median_centroid_hz",
+                                     "spectral_centroid.std_hz", "spectral_centroid.std_centroid_hz"})
+                if mean_hz is not None:
+                    s = f"mean spectral centroid is {mean_hz} Hz"
+                    sub = []
+                    if med_hz is not None:
+                        sub.append(f"median: {med_hz} Hz")
+                    if std_hz is not None:
+                        sub.append(f"std: {std_hz} Hz")
+                    if sub:
+                        s += f" ({', '.join(sub)})"
+                    metric_descriptions.append(s)
+
+            # 2. RMS Energy
+            if any(k.startswith("rms_energy.") for k in metrics):
+                mean_rms = metrics.get("rms_energy.mean_rms")
+                dbfs = metrics.get("rms_energy.mean_rms_dbfs")
+                max_rms = metrics.get("rms_energy.max_rms")
+                min_rms = metrics.get("rms_energy.min_rms")
+                handled_keys.update({"rms_energy.mean_rms", "rms_energy.mean_rms_dbfs", "rms_energy.max_rms", "rms_energy.min_rms"})
+                if mean_rms is not None:
+                    s = f"mean RMS energy is {mean_rms}"
+                    if dbfs is not None:
+                        s += f" ({dbfs} dBFS)"
+                    sub = []
+                    if max_rms is not None:
+                        sub.append(f"peak: {max_rms}")
+                    if min_rms is not None:
+                        sub.append(f"min: {min_rms}")
+                    if sub:
+                        s += f" (range: {', '.join(sub)})"
+                    metric_descriptions.append(s)
+
+            # 3. Pitch YIN
+            if any(k.startswith("pitch_yin.") for k in metrics):
+                mean_f0 = metrics.get("pitch_yin.mean_f0_hz")
+                voiced = metrics.get("pitch_yin.voiced_fraction")
+                handled_keys.update({"pitch_yin.mean_f0_hz", "pitch_yin.voiced_fraction"})
+                if mean_f0 is not None:
+                    s = f"fundamental frequency (F0) is {mean_f0} Hz"
+                    if voiced is not None:
+                        s += f" (voiced fraction: {voiced})"
+                    metric_descriptions.append(s)
+
+            # 4. Spectral Flatness
+            if any(k.startswith("spectral_flatness.") for k in metrics):
+                flatness = metrics.get("spectral_flatness.mean_flatness")
+                tonality = metrics.get("spectral_flatness.tonality_coefficient")
+                handled_keys.update({"spectral_flatness.mean_flatness", "spectral_flatness.tonality_coefficient"})
+                if flatness is not None:
+                    s = f"spectral flatness is {flatness}"
+                    if tonality is not None:
+                        s += f" (tonality: {tonality})"
+                    metric_descriptions.append(s)
+
+            # 5. Zero Crossing Rate
+            if any(k.startswith("zero_crossing_rate.") for k in metrics):
+                mean_zcr = metrics.get("zero_crossing_rate.mean_zcr")
+                handled_keys.add("zero_crossing_rate.mean_zcr")
+                if mean_zcr is not None:
+                    metric_descriptions.append(f"zero-crossing rate is {mean_zcr}")
+
+            # 6. SNR Estimate
+            if any(k.startswith("snr_estimate.") for k in metrics):
+                snr = metrics.get("snr_estimate.estimated_snr_db")
+                handled_keys.add("snr_estimate.estimated_snr_db")
+                if snr is not None:
+                    metric_descriptions.append(f"estimated SNR is {snr} dB")
+
+            # 7. Spectral Rolloff
+            if any(k.startswith("spectral_rolloff.") for k in metrics):
+                rolloff = metrics.get("spectral_rolloff.mean_rolloff_hz")
+                handled_keys.add("spectral_rolloff.mean_rolloff_hz")
+                if rolloff is not None:
+                    metric_descriptions.append(f"spectral roll-off is {rolloff} Hz")
+
+            # Fallback for unhandled or customized metrics
+            unhandled = []
+            for k, v in metrics.items():
+                if k not in handled_keys and not k.startswith("dataset_profiler.") and not k.endswith(".unit"):
+                    if isinstance(v, (int, float, str, bool)):
+                        clean_k = k.split(".")[-1].replace("_", " ")
+                        unhandled.append(f"{clean_k}: {v}")
+            if unhandled:
+                metric_descriptions.append(", ".join(unhandled))
+
+            if metric_descriptions:
+                lines.append(f"Measured values: {'; '.join(metric_descriptions)}.")
 
         # Disclose any warnings
         if evidence.warnings:

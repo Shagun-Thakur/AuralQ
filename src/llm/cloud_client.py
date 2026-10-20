@@ -99,9 +99,13 @@ class CloudClient:
                     candidates = data.get("candidates", [])
                     if candidates and "content" in candidates[0]:
                         parts = candidates[0]["content"].get("parts", [])
-                        if parts and "text" in parts[0]:
+                        text_parts = [p.get("text", "") for p in parts if "text" in p and not p.get("thought", False)]
+                        combined_text = "".join(text_parts).strip()
+                        if not combined_text:
+                            combined_text = "".join(p.get("text", "") for p in parts if "text" in p).strip()
+                        if combined_text:
                             self.model_name = model  # Lock to the successful model
-                            return parts[0]["text"]
+                            return combined_text
             except urllib.error.HTTPError as http_err:
                 last_error = http_err
                 # If model not found (404), forbidden (403), or invalid argument (400), try next candidate
@@ -155,11 +159,18 @@ class CloudClient:
         else:
             raise ValueError(f"Unsupported cloud provider: {self.provider}")
 
-    def generate_text(self, prompt: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:
+    def generate_text(
+        self,
+        prompt: str,
+        system: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
         """Synthesize natural-language text matching OllamaClient interface."""
+        sys_instruction = system or system_prompt
         t_start = time.perf_counter()
         try:
-            raw_text = self.generate_raw(prompt, system_prompt)
+            raw_text = self.generate_raw(prompt, sys_instruction)
             duration_ms = round((time.perf_counter() - t_start) * 1000, 2)
             return {"response": raw_text, "duration_ms": duration_ms}
         except Exception as e:
