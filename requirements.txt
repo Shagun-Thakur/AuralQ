@@ -14,4 +14,5 @@ pytest>=8.0.0
 
 # Application UI (Evolution 7)
 streamlit>=1.35.0
+plotly>=5.18.0
 

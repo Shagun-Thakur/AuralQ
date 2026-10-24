@@ -6,6 +6,7 @@ glassmorphism styling, interactive spectrograms, streaming dataset profiling,
 and verifiable deterministic citation traces.
 """
 
+import html
 import io
 import json
 import os
@@ -26,6 +27,16 @@ import numpy as np
 import soundfile as sf
 import streamlit as st
 
+from app.icons import get_icon
+from app.minecraft_theme import (
+    apply_minecraft_theme,
+    compute_initial_acoustic_profile,
+    generate_interactive_spectrogram,
+    generate_interactive_waveform,
+    render_grounded_answer_html,
+    tool_tiles_html,
+    ENDER_COLORS,
+)
 from src.agent.db import SessionDatabase
 from src.agent.orchestrator import AuralQAgent
 from src.agent.schemas import AgentResponse, GroundingReport, TurnRecord
@@ -39,139 +50,32 @@ from src.utils.ollama_helper import check_ollama_status, get_installed_ollama_mo
 
 
 # ---------------------------------------------------------------------------
-# Page Configuration & Dark Studio CSS
+# Page Configuration & Minecraft Ender-Acoustic Theme
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
     page_title="AuralQ — Audio Intelligence Studio",
-    page_icon="🎙️",
+    page_icon="✦",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-DARK_STUDIO_CSS = """
-<style>
-/* Main app backgrounds */
-.stApp {
-    background-color: #0B0F17;
-    color: #E2E8F0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
+apply_minecraft_theme()
 
-/* Glassmorphism sidebar */
-section[data-testid="stSidebar"] {
-    background-color: #111827 !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
-}
 
-/* Cards & containers */
-.studio-card {
-    background: #151D2C;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    padding: 16px 20px;
-    margin-bottom: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-}
-
-.studio-card-header {
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #94A3B8;
-    margin-bottom: 10px;
-}
-
-/* Badges */
-.badge-verified {
-    display: inline-flex;
-    align-items: center;
-    background-color: rgba(16, 185, 129, 0.15);
-    color: #10B981;
-    border: 1px solid rgba(16, 185, 129, 0.35);
-    padding: 3px 10px;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-top: 6px;
-}
-
-.badge-repaired {
-    display: inline-flex;
-    align-items: center;
-    background-color: rgba(245, 158, 11, 0.15);
-    color: #F59E0B;
-    border: 1px solid rgba(245, 158, 11, 0.35);
-    padding: 3px 10px;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-top: 6px;
-}
-
-.badge-abstain {
-    display: inline-flex;
-    align-items: center;
-    background-color: rgba(148, 163, 184, 0.15);
-    color: #94A3B8;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    padding: 3px 10px;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-top: 6px;
-}
-
-.badge-priority-critical {
-    background-color: rgba(239, 68, 68, 0.2);
-    color: #EF4444;
-    border: 1px solid #EF4444;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-}
-
-.badge-priority-recommended {
-    background-color: rgba(245, 158, 11, 0.2);
-    color: #F59E0B;
-    border: 1px solid #F59E0B;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-}
-
-.badge-priority-optional {
-    background-color: rgba(6, 182, 212, 0.2);
-    color: #06B6D4;
-    border: 1px solid #06B6D4;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-}
-
-/* Buttons */
-.stButton>button {
-    border-radius: 6px;
-    font-weight: 600;
-    transition: all 0.2s ease-in-out;
-}
-
-/* Chat bubble aesthetics */
-div[data-testid="stChatMessage"] {
-    background-color: #111827;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    padding: 12px 18px;
-    margin-bottom: 12px;
-}
-</style>
-"""
-
-st.markdown(DARK_STUDIO_CSS, unsafe_allow_html=True)
+def format_relative_time(timestamp: Optional[float]) -> str:
+    """Format Unix timestamp as short relative time string (e.g. '2m ago', '1h ago', 'just now')."""
+    if not timestamp:
+        return ""
+    diff_s = max(0, int(time.time() - timestamp))
+    if diff_s < 60:
+        return "just now"
+    elif diff_s < 3600:
+        return f"{diff_s // 60}m ago"
+    elif diff_s < 86400:
+        return f"{diff_s // 3600}h ago"
+    else:
+        return f"{diff_s // 86400}d ago"
 
 
 # ---------------------------------------------------------------------------
@@ -186,9 +90,9 @@ if "session_id" not in st.session_state:
 
 if "engine_mode" not in st.session_state:
     if IS_CLOUD_DEPLOYMENT or not check_ollama_status():
-        st.session_state.engine_mode = "☁️ Cloud Demo Mode"
+        st.session_state.engine_mode = "Cloud Demo Mode"
     else:
-        st.session_state.engine_mode = "🟢 Local Ollama (Private / Air-Gapped)"
+        st.session_state.engine_mode = "Local Ollama (Private / Air-Gapped)"
 
 if "selected_model" not in st.session_state:
     st.session_state.selected_model = "llama3.2:3b-instruct-q4_K_M"
@@ -254,40 +158,8 @@ def get_agent_instance() -> AuralQAgent:
 
 
 # ---------------------------------------------------------------------------
-# Helper: Plot Headless Spectrogram
+# Helper: Session Audit Report Generator
 # ---------------------------------------------------------------------------
-
-def generate_spectrogram_figure(waveform: np.ndarray, sr: int) -> plt.Figure:
-    """Generate a clean dark-themed STFT spectrogram visual plot."""
-    import librosa
-    import librosa.display
-
-    fig, ax = plt.subplots(figsize=(7, 2.2), facecolor="#151D2C")
-    ax.set_facecolor("#151D2C")
-
-    # Compute short-time Fourier transform
-    stft = librosa.stft(waveform, n_fft=1024, hop_length=256)
-    db = librosa.amplitude_to_db(np.abs(stft), ref=np.max)
-
-    img = librosa.display.specshow(
-        db,
-        sr=sr,
-        hop_length=256,
-        x_axis="time",
-        y_axis="hz",
-        ax=ax,
-        cmap="magma",
-    )
-
-    ax.set_xlabel("Time (s)", color="#94A3B8", fontsize=8)
-    ax.set_ylabel("Frequency (Hz)", color="#94A3B8", fontsize=8)
-    ax.tick_params(colors="#94A3B8", labelsize=8)
-    for spine in ax.spines.values():
-        spine.set_color("#334155")
-        spine.set_linewidth(0.8)
-
-    fig.tight_layout()
-    return fig
 
 
 def generate_markdown_audit_report(
@@ -298,7 +170,7 @@ def generate_markdown_audit_report(
 ) -> str:
     """Generate a clean, structured Markdown report of the session with DSP evidence."""
     lines = [
-        "# 🎙️ AuralQ Acoustic Session Audit Report",
+        "# AuralQ Acoustic Session Audit Report",
         "",
         f"- **Session ID**: `{session_id}`",
         f"- **Generated At**: `{time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}`",
@@ -336,7 +208,8 @@ def generate_markdown_audit_report(
                     lines.append(f"- **Verification**: `✅ 100% Grounded ({len(rep.verified_citations)} verified citations, 0 hallucinations)`")
 
                 if rep.verified_citations:
-                    lines.append(f"- **Verified Numerical Claims**: `{', '.join(str(c) for c in rep.verified_citations)}`")
+                    tokens_list = [getattr(c, "raw_token", str(c)) for c in rep.verified_citations]
+                    lines.append(f"- **Verified Numerical Claims**: `{', '.join(tokens_list)}`")
 
                 # Dispatched tools
                 if turn.parsed_intent and turn.parsed_intent.selected_tools:
@@ -369,59 +242,73 @@ def generate_markdown_audit_report(
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.markdown("## 🎙️ **AuralQ Studio**")
-    st.caption("Deterministic Audio Intelligence on Consumer Hardware")
+    st.markdown(
+        """
+        <div class='sidebar-brand-box'>
+            <div class='sidebar-title'>AuralQ Studio</div>
+            <div class='sidebar-subtitle'>Deterministic Audio Intelligence on Consumer Hardware</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    # 1. Session Management
-    col_sess1, col_sess2 = st.columns([1, 1]) if st.session_state.messages else (st.container(), None)
+    # 1. Session Management: Stacked full-width rows (Item 1)
+    if st.button("New Session", use_container_width=True, type="primary"):
+        st.session_state.session_id = str(uuid.uuid4())[:8]
+        st.session_state.active_audio_path = None
+        st.session_state.active_dataset_path = None
+        st.session_state.audio_metadata = None
+        st.session_state.audio_waveform = None
+        st.session_state.messages = []
+        if "_last_uploaded_name" in st.session_state:
+            st.session_state._last_uploaded_name = None
+        st.rerun()
 
-    if col_sess2:
-        with col_sess1:
-            if st.button("➕ New Session", use_container_width=True, type="primary"):
-                st.session_state.session_id = str(uuid.uuid4())[:8]
-                st.session_state.active_audio_path = None
-                st.session_state.active_dataset_path = None
-                st.session_state.audio_metadata = None
-                st.session_state.audio_waveform = None
-                st.session_state.messages = []
-                st.rerun()
-        with col_sess2:
-            report_md = generate_markdown_audit_report(
-                session_id=st.session_state.session_id,
-                messages=st.session_state.messages,
-                audio_path=st.session_state.active_audio_path,
-                dataset_path=st.session_state.active_dataset_path,
-            )
-            st.download_button(
-                label="📥 Export Report",
-                data=report_md,
-                file_name=f"AuralQ_Audit_{st.session_state.session_id}.md",
-                mime="text/markdown",
-                use_container_width=True,
-            )
-    else:
-        if st.button("➕ New Analysis Session", use_container_width=True, type="primary"):
-            st.session_state.session_id = str(uuid.uuid4())[:8]
-            st.session_state.active_audio_path = None
-            st.session_state.active_dataset_path = None
-            st.session_state.audio_metadata = None
-            st.session_state.audio_waveform = None
-            st.session_state.messages = []
-            st.rerun()
+    report_md = generate_markdown_audit_report(
+        session_id=st.session_state.session_id,
+        messages=st.session_state.messages,
+        audio_path=st.session_state.active_audio_path,
+        dataset_path=st.session_state.active_dataset_path,
+    )
+    st.download_button(
+        label="Export Report",
+        data=report_md,
+        file_name=f"AuralQ_Audit_{st.session_state.session_id}.md",
+        mime="text/markdown",
+        use_container_width=True,
+        type="secondary",
+        disabled=not bool(st.session_state.messages),
+    )
 
     st.markdown("---")
 
-    # 2. Past Sessions Drawer (Strict Local Privacy Only)
-    st.markdown("### 📁 Past Sessions")
+    # 2. Past Sessions Drawer (Strict Local Privacy Only - Section 6 Polish)
+    st.markdown("### Past Sessions")
     if is_local_engine:
         sessions = db.list_sessions(limit=10)
         if sessions:
             for s in sessions:
-                col_title, col_del = st.columns([5, 1])
+                col_title, col_del = st.columns([3.2, 1.1])
                 is_active = s["session_id"] == st.session_state.session_id
                 prefix = "▶ " if is_active else ""
+                
+                # Title prioritizes the question title, then audio filename, then session id
+                title_text = s.get("title") or (Path(s["audio_path"]).name if s.get("audio_path") else f"Session {s['session_id'][:4]}")
+                
+                # Two-line button label: line 1 = title, line 2 = relative timestamp (or &nbsp; if none)
+                rel_time = format_relative_time(s.get("created_at"))
+                if not rel_time and s.get("audio_path"):
+                    rel_time = Path(s["audio_path"]).name
+                time_line = rel_time if rel_time else "&nbsp;"
+                btn_label = f"{prefix}{title_text}\n\n{time_line}"
+
+                del_key = f"del_{s['session_id']}"
+                confirm_key = f"confirm_del_{s['session_id']}"
+                is_confirming = st.session_state.get(confirm_key, False)
+
                 with col_title:
-                    btn_label = f"{prefix}{s['title'][:22]} ({s['turn_count']})"
+                    if is_active:
+                        st.markdown("<div class='active-sess-indicator'></div>", unsafe_allow_html=True)
                     if st.button(btn_label, key=f"sess_{s['session_id']}", use_container_width=True):
                         # Load session turns
                         st.session_state.session_id = s["session_id"]
@@ -446,30 +333,34 @@ with st.sidebar:
                                     st.session_state.audio_waveform = res.waveform
                                     st.session_state.audio_sr = res.sample_rate
                         st.rerun()
+
                 with col_del:
-                    if st.button("🗑️", key=f"del_{s['session_id']}"):
-                        db.delete_session(s["session_id"])
-                        if is_active:
-                            st.session_state.session_id = str(uuid.uuid4())[:8]
-                            st.session_state.messages = []
-                        st.rerun()
+                    del_label = "Confirm?" if is_confirming else "Del"
+                    del_type = "primary" if is_confirming else "secondary"
+                    if st.button(del_label, key=del_key, use_container_width=True, type=del_type):
+                        if is_confirming:
+                            st.session_state[confirm_key] = False
+                            db.delete_session(s["session_id"])
+                            if is_active:
+                                st.session_state.session_id = str(uuid.uuid4())[:8]
+                                st.session_state.messages = []
+                            st.rerun()
+                        else:
+                            for k in list(st.session_state.keys()):
+                                if k.startswith("confirm_del_"):
+                                    st.session_state[k] = False
+                            st.session_state[confirm_key] = True
+                            st.rerun()
         else:
             st.caption("No saved local sessions yet.")
     else:
-        st.markdown(
-            """
-            <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 6px; padding: 10px; font-size: 0.8rem; color: #06B6D4;">
-                🛡️ <b>Ephemeral Cloud Demo Mode</b><br>Zero data is saved to any database. Conversations exist only in active browser memory.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.caption("Session Memory: Ephemeral (Zero database persistence in Cloud Demo)")
 
     st.markdown("---")
 
     # 3. Engine & Model Configuration
     if IS_CLOUD_DEPLOYMENT:
-        st.markdown("### ☁️ Cloud Demo Engine")
+        st.markdown("### Cloud Demo Engine")
         st.caption("Running publicly in ephemeral mode with cloud LLMs.")
         st.session_state.cloud_provider = st.selectbox("Provider:", ["gemini", "groq"])
 
@@ -524,10 +415,11 @@ with st.sidebar:
             st.link_button("🐙 Open Repository on GitHub", "https://github.com/Shagun-Thakur/AuralQ", use_container_width=True)
     else:
         # Local desktop workstation: Full dual-mode engine selector
-        st.markdown("### ⚙️ Engine Selector")
+        st.markdown("### Engine Selector")
+        engine_options = ["Local Ollama (Private / Air-Gapped)", "Cloud Demo Mode"]
         engine_choice = st.radio(
             "Execution Mode:",
-            ["🟢 Local Ollama (Private / Air-Gapped)", "☁️ Cloud Demo Mode"],
+            engine_options,
             index=0 if is_local_engine else 1,
         )
         if engine_choice != st.session_state.engine_mode:
@@ -537,7 +429,7 @@ with st.sidebar:
         if "Local Ollama" in st.session_state.engine_mode:
             ollama_alive = check_ollama_status()
             if ollama_alive:
-                st.caption("🟢 **Ollama Daemon**: Connected (`127.0.0.1:11434`)")
+                st.caption("Ollama Daemon: Connected (`127.0.0.1:11434`)")
                 installed_models = get_installed_ollama_models()
                 if installed_models:
                     st.session_state.selected_model = st.selectbox(
@@ -547,7 +439,7 @@ with st.sidebar:
                     )
                 else:
                     st.warning("No local models found.")
-                    if st.button("⬇️ Pull `llama3.2:3b` (~2.0 GB)"):
+                    if st.button("Pull `llama3.2:3b` (~2.0 GB)"):
                         with st.spinner("Downloading model via Ollama..."):
                             if pull_ollama_model("llama3.2:3b-instruct-q4_K_M"):
                                 st.success("Model downloaded successfully!")
@@ -555,9 +447,9 @@ with st.sidebar:
                             else:
                                 st.error("Failed to download model. Ensure Ollama is running.")
             else:
-                st.error("⚠️ **Ollama is Offline**.\nPlease start Ollama locally (`ollama serve`) or switch to Cloud Demo Mode.")
+                st.error("Ollama is Offline.\nPlease start Ollama locally (`ollama serve`) or switch to Cloud Demo Mode.")
         else:
-            st.caption("☁️ **Cloud Demo**: Runs using high-speed cloud LLM API")
+            st.caption("Cloud Demo: Runs using high-speed cloud LLM API")
             st.session_state.cloud_provider = st.selectbox("Provider:", ["gemini", "groq"])
 
             # Check if environment or Streamlit secrets has a default key
@@ -570,11 +462,11 @@ with st.sidebar:
                 pass
 
             if server_key:
-                st.success(f"🔑 **Default `{env_var_name}` Detected**")
+                st.success(f"Default `{env_var_name}` Detected")
                 custom_key = st.text_input("Custom Key Override (Optional / Session RAM):", type="password", placeholder="Leave blank to use default key")
                 st.session_state.cloud_api_key = custom_key if custom_key else server_key
             else:
-                st.caption(f"🔑 **No `{env_var_name}` configured on host**")
+                st.caption(f"No `{env_var_name}` configured on host")
                 custom_key = st.text_input(
                     f"Enter {st.session_state.cloud_provider.title()} API Key:",
                     type="password",
@@ -585,265 +477,54 @@ with st.sidebar:
                 else:
                     st.session_state.cloud_api_key = ""
                     st.info(
-                        "💡 **No API Key?**\n"
+                        "**No API Key?**\n"
                         "- Get a free key at [Google AI Studio](https://aistudio.google.com/) or [Groq Console](https://console.groq.com/).\n"
-                        "- Or switch back to **🟢 Local Ollama** above for 100% free, private local execution with zero keys!"
+                        "- Or switch back to **Local Ollama** above for 100% free, private local execution with zero keys!"
                     )
 
-    st.markdown("---")
-
-
-    # 4. Sample Showcase Gallery
-    st.markdown("### 📦 Quick Demo Presets")
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        if st.button("🎵 1kHz Sine", use_container_width=True):
-            p = SAMPLE_DIR / "clean_sine_1khz.wav"
-            res = load_audio_file(p)
-            st.session_state.active_audio_path = str(p.resolve())
-            st.session_state.active_dataset_path = None
-            st.session_state.audio_metadata = res.metadata
-            st.session_state.audio_waveform = res.waveform
-            st.session_state.audio_sr = res.sample_rate
-            st.rerun()
-
-        if st.button("🥁 Clipped Snare", use_container_width=True):
-            p = SAMPLE_DIR / "clipped_snare.wav"
-            res = load_audio_file(p)
-            st.session_state.active_audio_path = str(p.resolve())
-            st.session_state.active_dataset_path = None
-            st.session_state.audio_metadata = res.metadata
-            st.session_state.audio_waveform = res.waveform
-            st.session_state.audio_sr = res.sample_rate
-            st.rerun()
-
-    with col_s2:
-        if st.button("🌊 Noisy Speech", use_container_width=True):
-            p = SAMPLE_DIR / "noisy_audio.wav"
-            res = load_audio_file(p)
-            st.session_state.active_audio_path = str(p.resolve())
-            st.session_state.active_dataset_path = None
-            st.session_state.audio_metadata = res.metadata
-            st.session_state.audio_waveform = res.waveform
-            st.session_state.audio_sr = res.sample_rate
-            st.rerun()
-
-        if st.button("📁 Sample Dataset", use_container_width=True):
-            p = SAMPLE_DIR / "sample_dataset"
-            st.session_state.active_dataset_path = str(p.resolve())
-            st.session_state.active_audio_path = None
-            st.session_state.audio_metadata = None
-            st.session_state.audio_waveform = None
-            st.rerun()
-
 
 # ---------------------------------------------------------------------------
-# MAIN STAGE: Top Workspace (Audio / Dataset Viewer)
+# MAIN STAGE: Top Navigation Bar (Typographic Hero + Subtitle + Status Pill)
 # ---------------------------------------------------------------------------
 
-st.title("🎙️ AuralQ Studio")
-st.caption("Deterministic Natural-Language Audio Intelligence with Verifiable Grounding")
+if is_local_engine:
+    ollama_alive = check_ollama_status()
+    if ollama_alive:
+        status_pill_html = "<span class='xp-nameplate-local'>[ LOCAL • AIR-GAPPED ]</span>"
+    else:
+        status_pill_html = "<span class='xp-nameplate-offline'>[ LOCAL • OFFLINE ]</span>"
+else:
+    status_pill_html = "<span class='xp-nameplate-cloud'>[ CLOUD • EPHEMERAL ]</span>"
 
-# Context banner
-if not is_local_engine:
-    st.info("🛡️ **Cloud Demo Mode**: Your uploads and queries are ephemeral and will NOT be stored on any database. For 100% private, on-premise execution, clone the GitHub repository and run locally.")
-
-# Ingestion Tabs
-tab_single, tab_dataset = st.tabs(["🎵 Single Audio File", "📁 Audio Dataset Audit"])
-
-with tab_single:
-    uploaded_file = st.file_uploader(
-        "Upload an audio clip (.wav, .mp3, .flac, .ogg):",
-        type=["wav", "mp3", "flac", "ogg"],
-        label_visibility="collapsed",
-    )
-    if uploaded_file is not None:
-        # Save to temp location
-        temp_upload_path = Path("data/samples/uploaded_active.wav")
-        temp_upload_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(temp_upload_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-
-        res = load_audio_file(temp_upload_path)
-        if res.status == "SUCCESS":
-            st.session_state.active_audio_path = str(temp_upload_path.resolve())
-            st.session_state.active_dataset_path = None
-            st.session_state.audio_metadata = res.metadata
-            st.session_state.audio_waveform = res.waveform
-            st.session_state.audio_sr = res.sample_rate
-            st.toast(f"Loaded {uploaded_file.name} successfully!", icon="✅")
-        else:
-            st.error(f"Ingestion rejected ({res.status}): {res.message}")
-
-    # Display Active Audio Stage
-    if st.session_state.active_audio_path and st.session_state.audio_waveform is not None:
-        col_player, col_spec, col_metrics = st.columns([2, 3, 2])
-
-        with col_player:
-            st.markdown("<div class='studio-card-header'>AUDIO PLAYBACK</div>", unsafe_allow_html=True)
-            # Standardize buffer for browser playback
-            buf = io.BytesIO()
-            sf.write(buf, st.session_state.audio_waveform, st.session_state.audio_sr, format="WAV")
-            st.audio(buf.getvalue(), format="audio/wav")
-            st.caption(f"File: `{Path(st.session_state.active_audio_path).name}`")
-
-        with col_spec:
-            st.markdown("<div class='studio-card-header'>STFT SPECTROGRAM (dBFS)</div>", unsafe_allow_html=True)
-            fig = generate_spectrogram_figure(st.session_state.audio_waveform, st.session_state.audio_sr)
-            st.pyplot(fig)
-
-        with col_metrics:
-            st.markdown("<div class='studio-card-header'>ACOUSTIC PROPERTIES</div>", unsafe_allow_html=True)
-            meta = st.session_state.audio_metadata
-            if meta:
-                st.markdown(f"**Sample Rate**: `{meta.sample_rate} Hz`")
-                st.markdown(f"**Duration**: `{meta.duration_sec:.2f} s`")
-                st.markdown(f"**Channels**: `{meta.num_channels} ({'Mono' if meta.num_channels==1 else 'Stereo'})`")
-                st.markdown(f"**RMS Energy**: `{meta.rms_dbfs:.1f} dBFS`")
-
-                if meta.is_clipped:
-                    st.markdown("<span style='color:#EF4444; font-weight:700;'>⚠️ Clipping Detected</span>", unsafe_allow_html=True)
-
-with tab_dataset:
-    st.markdown("Audit a directory of audio files for model training hygiene, duration skews, and preprocessing needs.")
-
-    # 1-Click quick load for demo dataset
-    demo_samples_dir = Path("data/samples")
-    if demo_samples_dir.exists() and demo_samples_dir.is_dir():
-        col_d1, col_d2 = st.columns([2, 1])
-        with col_d1:
-            st.caption("Quick testing with bundled sample files:")
-        with col_d2:
-            if st.button("📁 Load Built-in Demo Dataset", use_container_width=True):
-                st.session_state.active_dataset_path = str(demo_samples_dir.resolve())
-                st.session_state.active_audio_path = None
-                st.session_state.audio_metadata = None
-                st.session_state.audio_waveform = None
-                st.rerun()
-
-    dataset_input = st.text_input(
-        "Dataset Directory Path:",
-        value=st.session_state.active_dataset_path or "",
-        placeholder="C:\\Path\\To\\Audio\\Dataset",
-    )
-    if st.button("Set Active Dataset"):
-        p = Path(dataset_input)
-        if p.exists() and p.is_dir():
-            st.session_state.active_dataset_path = str(p.resolve())
-            st.session_state.active_audio_path = None
-            st.session_state.audio_metadata = None
-            st.session_state.audio_waveform = None
-            st.success(f"Active dataset registered: `{p.resolve()}`")
-            st.rerun()
-        else:
-            st.error("Invalid dataset directory path. Please check the path and try again.")
-
-    if st.session_state.active_dataset_path:
-        st.markdown(f"📂 **Active Dataset**: `{st.session_state.active_dataset_path}`")
-        if st.button("🔍 Run Quick Acoustic Hygiene Audit", type="primary"):
-            agent = get_agent_instance()
-            with st.spinner("Streaming through dataset files..."):
-                audit_resp = agent.query(
-                    "Please audit my audio dataset directory and recommend what preprocessing pipeline I should apply.",
-                    dataset_path=st.session_state.active_dataset_path,
-                )
-                st.session_state.messages.append({"role": "user", "content": f"Audit dataset directory `{st.session_state.active_dataset_path}` and recommend preprocessing pipeline."})
-                st.session_state.messages.append({"role": "assistant", "content": audit_resp.response_text, "turn": audit_resp.turn_record})
-                if is_local_engine:
-                    db.save_turn(st.session_state.session_id, audit_resp.turn_record)
-                st.rerun()
-
-st.markdown("---")
+st.markdown(
+    f"""
+    <div class='top-nav-bar'>
+        <div class='top-nav-left'>
+            <span class='hero-brand-title'>AuralQ Studio</span>
+            <span class='top-nav-sub'>Deterministic Audio Intelligence with Verifiable Grounding</span>
+        </div>
+        <div class='top-nav-right'>
+            {status_pill_html}
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 
-
-# ---------------------------------------------------------------------------
-# MAIN STAGE: Conversational Chat Stream
-# ---------------------------------------------------------------------------
-
-st.markdown("### 💬 Acoustic Dialogue & Verification Stream")
-
-# Display previous chat messages
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
-
-        # Display verification badge and tool trace if available
-        turn: Optional[TurnRecord] = msg.get("turn")
-        if turn and turn.grounding_report:
-            rep: GroundingReport = turn.grounding_report
-            if turn.evidence and turn.evidence.status == "ABSTAIN":
-                st.markdown("<span class='badge-abstain'>🛑 Abstained: Non-Acoustic Scope</span>", unsafe_allow_html=True)
-            elif rep.was_repaired:
-                st.markdown(f"<span class='badge-repaired'>🛡️ Grounding Repaired: {len(rep.hallucinated_numbers)} unverified claim(s) corrected</span>", unsafe_allow_html=True)
-            elif rep.is_fully_grounded:
-                st.markdown(f"<span class='badge-verified'>✅ Verified DSP Grounding: {rep.grounding_score*100:.0f}% ({len(rep.verified_citations)} verified numbers)</span>", unsafe_allow_html=True)
-
-            # Expandable Tool Trace Drawer
-            with st.expander(f"🔍 Inspect Tool Trace & Evidence ({turn.latency_breakdown.get('total_ms', 0):.0f} ms total)"):
-                col_tr1, col_tr2 = st.columns([1, 1])
-                with col_tr1:
-                    st.markdown("**Dispatched Tools:**")
-                    if turn.parsed_intent and turn.parsed_intent.selected_tools:
-                        for tc in turn.parsed_intent.selected_tools:
-                            st.markdown(f"- `{tc.tool_name}` (Params: `{tc.parameters}`)")
-                    else:
-                        st.markdown("*(Zero tools dispatched)*")
-
-                    st.markdown("**Latency Breakdown:**")
-                    lat = turn.latency_breakdown
-                    st.markdown(f"- Intent Parsing: `{lat.get('intent_ms', 0):.1f} ms`")
-                    st.markdown(f"- DSP Compute: `{lat.get('dsp_ms', 0):.1f} ms`")
-                    st.markdown(f"- Grounded Synthesis: `{lat.get('synthesis_ms', 0):.1f} ms`")
-                    st.markdown(f"- Citation Audit: `{lat.get('validation_ms', 0):.1f} ms`")
-
-                with col_tr2:
-                    st.markdown("**Calculated Evidence Metrics:**")
-                    if turn.evidence and turn.evidence.consolidated_metrics:
-                        st.json(turn.evidence.consolidated_metrics)
-                    else:
-                        st.caption("No numerical evidence extracted.")
-
-
-# User Query Input
-user_query = st.chat_input("Ask an acoustic question about this audio recording or dataset...")
-
-if user_query:
-    # 1. Display User Message
-    st.session_state.messages.append({"role": "user", "content": user_query})
-    with st.chat_message("user"):
-        st.markdown(user_query)
-
-    # 2. Execute Agent Loop with Step Indicators
-    with st.chat_message("assistant"):
-        with st.status("Analyzing audio...", expanded=True) as status_box:
-            st.write("⏳ Step 1: Interpreting acoustic intent via LLM...")
-            agent = get_agent_instance()
-
-            st.write("⚡ Step 2: Executing deterministic DSP tools...")
-            resp: AgentResponse = agent.query(
-                question=user_query,
-                audio_path=st.session_state.active_audio_path,
-                dataset_path=st.session_state.active_dataset_path,
-            )
-
-            st.write("🛡️ Step 3: Verifying numerical citations against mathematical evidence...")
-            status_box.update(label="Analysis complete & verified!", state="complete", expanded=False)
-
-        st.markdown(resp.response_text)
-
-        # Verification pill
-        turn = resp.turn_record
-        if turn and turn.grounding_report:
-            rep = turn.grounding_report
-            if turn.evidence and turn.evidence.status == "ABSTAIN":
-                st.markdown("<span class='badge-abstain'>🛑 Abstained: Non-Acoustic Scope</span>", unsafe_allow_html=True)
-            elif rep.was_repaired:
-                st.markdown(f"<span class='badge-repaired'>🛡️ Grounding Repaired: {len(rep.hallucinated_numbers)} unverified claim(s) corrected</span>", unsafe_allow_html=True)
-            elif rep.is_fully_grounded:
-                st.markdown(f"<span class='badge-verified'>✅ Verified DSP Grounding: {rep.grounding_score*100:.0f}% ({len(rep.verified_citations)} verified numbers)</span>", unsafe_allow_html=True)
-
-        # Save to state and SQLite (local only)
+def execute_acoustic_pipeline(query_text: str):
+    """Execute the full Layer 1-5 agent grounding pipeline for a query."""
+    if not query_text or not query_text.strip():
+        return
+    q = query_text.strip()
+    agent = get_agent_instance()
+    with st.spinner("Executing deterministic DSP tools & citation grounding..."):
+        resp: AgentResponse = agent.query(
+            question=q,
+            audio_path=st.session_state.active_audio_path,
+            dataset_path=st.session_state.active_dataset_path,
+        )
+        st.session_state.messages.append({"role": "user", "content": q})
         st.session_state.messages.append({
             "role": "assistant",
             "content": resp.response_text,
@@ -851,6 +532,443 @@ if user_query:
         })
         if is_local_engine and resp.turn_record:
             db.save_turn(st.session_state.session_id, resp.turn_record)
-
         st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# ASYMMETRIC STUDIO WORKSPACE (35% : 65%)
+# ---------------------------------------------------------------------------
+
+col_left, col_right = st.columns([0.35, 0.65], gap="medium")
+
+# =============================================================================
+# LEFT COLUMN: Source Audio & Ingestion (Compact)
+# =============================================================================
+with col_left:
+    st.markdown("<div class='studio-card-header'>HOPPER INGESTION & HOTBAR</div>", unsafe_allow_html=True)
+
+    # 1. Drag & drop uploader (Hopper Slot - Key rotates on New Session for clean state consistency)
+    uploader_key = f"audio_file_uploader_{st.session_state.session_id}"
+    uploaded_file = st.file_uploader(
+        "Upload audio clip (.wav, .mp3, .flac, .ogg):",
+        type=["wav", "mp3", "flac", "ogg"],
+        key=uploader_key,
+        label_visibility="collapsed",
+    )
+    if uploaded_file is not None:
+        if getattr(st.session_state, "_last_uploaded_name", None) != uploaded_file.name:
+            temp_upload_path = Path("data/samples/uploaded_active.wav")
+            temp_upload_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(temp_upload_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+
+            res = load_audio_file(temp_upload_path)
+            if res.status == "SUCCESS":
+                st.session_state._last_uploaded_name = uploaded_file.name
+                st.session_state.active_audio_path = str(temp_upload_path.resolve())
+                st.session_state.active_dataset_path = None
+                st.session_state.audio_metadata = res.metadata
+                st.session_state.audio_waveform = res.waveform
+                st.session_state.audio_sr = res.sample_rate
+                st.toast(f"Loaded {uploaded_file.name}!", icon="✅")
+                st.rerun()
+            else:
+                st.error(f"Ingestion rejected: {res.message}")
+
+    # 2. Hotbar Preset Buttons (Square 3D Tiles)
+    col_p1, col_p2, col_p3 = st.columns(3)
+    with col_p1:
+        if st.button("1k Sine", use_container_width=True):
+            p = SAMPLE_DIR / "clean_sine_1khz.wav"
+            res = load_audio_file(p)
+            st.session_state._last_uploaded_name = None
+            st.session_state.active_audio_path = str(p.resolve())
+            st.session_state.active_dataset_path = None
+            st.session_state.audio_metadata = res.metadata
+            st.session_state.audio_waveform = res.waveform
+            st.session_state.audio_sr = res.sample_rate
+            st.rerun()
+    with col_p2:
+        if st.button("Snare", use_container_width=True):
+            p = SAMPLE_DIR / "clipped_snare.wav"
+            res = load_audio_file(p)
+            st.session_state._last_uploaded_name = None
+            st.session_state.active_audio_path = str(p.resolve())
+            st.session_state.active_dataset_path = None
+            st.session_state.audio_metadata = res.metadata
+            st.session_state.audio_waveform = res.waveform
+            st.session_state.audio_sr = res.sample_rate
+            st.rerun()
+    with col_p3:
+        if st.button("Noise", use_container_width=True):
+            p = SAMPLE_DIR / "noisy_audio.wav"
+            res = load_audio_file(p)
+            st.session_state._last_uploaded_name = None
+            st.session_state.active_audio_path = str(p.resolve())
+            st.session_state.active_dataset_path = None
+            st.session_state.audio_metadata = res.metadata
+            st.session_state.audio_waveform = res.waveform
+            st.session_state.audio_sr = res.sample_rate
+            st.rerun()
+
+    # 3. Audio Playback & 4-Box Ender Stat Grid (When Audio Active)
+    if st.session_state.active_audio_path and st.session_state.audio_waveform is not None:
+        if getattr(st.session_state, "_last_uploaded_name", None) and "uploaded_active" in Path(st.session_state.active_audio_path).name:
+            active_name = st.session_state._last_uploaded_name
+        else:
+            active_name = Path(st.session_state.active_audio_path).name
+
+        st.markdown(
+            f"""
+            <div class='jukebox-panel' style='margin: 8px 0 10px 0;'>
+                <div class='jukebox-header'>
+                    {get_icon('music_disc')} <span style='font-family: var(--mono); font-size: 11px; color: var(--teal); font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;'>ACTIVE: {html.escape(active_name)}</span>
+                </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        buf = io.BytesIO()
+        sf.write(buf, st.session_state.audio_waveform, st.session_state.audio_sr, format="WAV")
+        st.audio(buf.getvalue(), format="audio/wav")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        meta = st.session_state.audio_metadata
+        if meta:
+            sr_khz = meta.sample_rate / 1000.0
+            sr_display = f"{sr_khz:.2f} kHz" if meta.sample_rate % 1000 != 0 else f"{int(sr_khz)} kHz"
+            dur_display = f"{meta.duration_sec:.2f} s"
+            rms_display = f"{meta.rms_dbfs:.1f} dBFS"
+            is_clipped = getattr(meta, "is_clipped", False)
+            is_silent = getattr(meta, "is_silent", meta.rms_dbfs < -60.0)
+
+            if is_clipped:
+                status_html = "<span style='color: var(--redstone);'>🚨 CLIPPED</span>"
+            elif is_silent:
+                status_html = "<span style='color: var(--warning);'>⚠️ MUTED</span>"
+            else:
+                status_html = "<span style='color: var(--teal);'>✔ CLEAN</span>"
+
+            st.markdown(
+                f"""
+                <div class='ender-stat-grid' style='margin-bottom: 10px;'>
+                    <div class='ender-stat-box'>
+                        <span class='stat-label'>SAMPLE RATE</span>
+                        <span class='stat-value'>{sr_display}</span>
+                    </div>
+                    <div class='ender-stat-box'>
+                        <span class='stat-label'>DURATION</span>
+                        <span class='stat-value'>{dur_display}</span>
+                    </div>
+                    <div class='ender-stat-box'>
+                        <span class='stat-label'>RMS</span>
+                        <span class='stat-value'>{rms_display}</span>
+                    </div>
+                    <div class='ender-stat-box'>
+                        <span class='stat-label'>STATUS</span>
+                        <span class='stat-value'>{status_html}</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    # 4. Batch Dataset Audit Expander (Placed Last in Left Column)
+    with st.expander("Batch Dataset Audit", expanded=False):
+        sample_dataset_dir = SAMPLE_DIR / "sample_dataset"
+        if sample_dataset_dir.exists() and sample_dataset_dir.is_dir():
+            if st.button("Load Built-in Sample Dataset", use_container_width=True):
+                st.session_state.active_dataset_path = str(sample_dataset_dir.resolve())
+                st.session_state.active_audio_path = None
+                st.session_state.audio_metadata = None
+                st.session_state.audio_waveform = None
+                st.rerun()
+
+        dataset_input = st.text_input(
+            "Directory:",
+            value=st.session_state.active_dataset_path or "",
+            placeholder="C:\\Path\\To\\Audio\\Dataset",
+        )
+        if st.button("Set Dataset"):
+            p = Path(dataset_input)
+            if p.exists() and p.is_dir():
+                st.session_state.active_dataset_path = str(p.resolve())
+                st.session_state.active_audio_path = None
+                st.session_state.audio_metadata = None
+                st.session_state.audio_waveform = None
+                st.success(f"Active dataset: `{p.resolve()}`")
+                st.rerun()
+
+        if st.session_state.active_dataset_path:
+            if st.button("Run Dataset Hygiene Audit", type="primary", use_container_width=True):
+                execute_acoustic_pipeline("Please audit my audio dataset directory and recommend what preprocessing pipeline I should apply.")
+
+
+# =============================================================================
+# RIGHT COLUMN: Conversation, Terminal & Visualisations
+# =============================================================================
+with col_right:
+    has_audio = bool(st.session_state.active_audio_path or st.session_state.active_dataset_path)
+
+    # 1. Acoustic Query Terminal (Compact ~3 lines, Button directly under)
+    st.markdown("<div class='studio-card-header'>ACOUSTIC QUERY TERMINAL</div>", unsafe_allow_html=True)
+    with st.form("left_query_form", clear_on_submit=False):
+        if has_audio:
+            placeholder_text = "Enter acoustic question (e.g. Is there background noise? Calculate spectral centroid)..."
+        else:
+            placeholder_text = "Select a Hotbar Preset (1k Sine / Snare / Noise) or drop an audio file in the Hopper to ignite the altar..."
+
+        query_input = st.text_area(
+            "Query Prompt:",
+            placeholder=placeholder_text,
+            height=68,
+            label_visibility="collapsed",
+            disabled=not has_audio,
+        )
+        run_query_btn = st.form_submit_button(
+            "IGNITE ACOUSTIC RUN",
+            type="primary",
+            use_container_width=True,
+            disabled=not has_audio,
+        )
+
+    if run_query_btn and query_input.strip() and has_audio:
+        execute_acoustic_pipeline(query_input.strip())
+
+    # Check for newest assistant response
+    latest_assistant_msg = None
+    for msg in reversed(st.session_state.messages):
+        if msg.get("role") == "assistant":
+            latest_assistant_msg = msg
+            break
+
+    if not has_audio:
+        # EMPTY STATE: ONE unified standby panel only (Item 5)
+        st.markdown(
+            """
+            <div class='profile-card dormant' style='padding: 24px 20px; text-align: center; margin-top: 10px;'>
+                <div class='profile-header' style='font-size: 12px; margin-bottom: 8px;'><span style='color: var(--teal);'>✦</span> ACOUSTIC INTELLIGENCE STANDBY</div>
+                <div style='color: var(--cream); font-size: 11px; line-height: 1.8; max-width: 520px; margin: 0 auto; font-family: var(--mono);'>
+                    Insert an audio record via the <b>Hopper</b> or select a <b>Hotbar Preset</b> to initiate the analysis altar.<br>
+                    Awaiting audio signal to render dimensional STFT spectrogram, waveform dynamics, and acoustic telemetry.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        # 2. Grounding banner + plain-language verification line + Answer Panel
+        if latest_assistant_msg:
+            turn: Optional[TurnRecord] = latest_assistant_msg.get("turn")
+            box_class = "grounded-answer-box"
+
+            if turn and turn.grounding_report:
+                rep: GroundingReport = turn.grounding_report
+                if turn.evidence and turn.evidence.status == "ABSTAIN":
+                    xp_header_html = "<div class='xp-bar-container abstain'>[ ABSTAINED • NON-ACOUSTIC SCOPE ]</div>"
+                    box_class = "grounded-answer-box abstain"
+                elif rep.was_repaired:
+                    xp_header_html = f"<div class='xp-bar-container repaired'>[ REPAIRED • {len(rep.hallucinated_numbers)} UNVERIFIED REMOVED ]</div>"
+                    box_class = "grounded-answer-box repaired"
+                elif rep.is_fully_grounded:
+                    xp_count = len(rep.verified_citations)
+                    xp_header_html = f"<div class='xp-bar-container verified'>[ 100% GROUNDED • {xp_count} XP VERIFIED ]</div>"
+                    box_class = "grounded-answer-box verified"
+                else:
+                    xp_count = len(rep.verified_citations)
+                    xp_score = rep.grounding_score * 100
+                    xp_header_html = f"<div class='xp-bar-container verified'>[ {xp_score:.0f}% GROUNDED • {xp_count} XP VERIFIED ]</div>"
+                    box_class = "grounded-answer-box verified"
+            else:
+                xp_header_html = "<div class='xp-bar-container verified'>[ GROUNDED SYNTHESIS & AUDIT ]</div>"
+                box_class = "grounded-answer-box"
+
+            st.markdown(xp_header_html, unsafe_allow_html=True)
+
+            # Plain-Language Verification Line
+            if turn and turn.grounding_report:
+                rep = turn.grounding_report
+                num_verified = len(rep.verified_citations)
+                if rep.is_fully_grounded:
+                    plain_txt = f"{num_verified} numeric claim{'s' if num_verified != 1 else ''} verified against deterministic DSP output."
+                elif rep.was_repaired:
+                    plain_txt = f"{num_verified} claim{'s' if num_verified != 1 else ''} verified • {len(rep.hallucinated_numbers)} ungrounded number{'s' if len(rep.hallucinated_numbers) != 1 else ''} repaired."
+                else:
+                    plain_txt = f"{num_verified} of {rep.total_numbers_cited} numeric claim{'s' if rep.total_numbers_cited != 1 else ''} verified against DSP evidence."
+                st.markdown(f"<div class='verification-plain-line'>{plain_txt}</div>", unsafe_allow_html=True)
+
+            # 3. Answer Box
+            answer_html = render_grounded_answer_html(latest_assistant_msg["content"], turn)
+            st.markdown(f"<div class='{box_class}'>{answer_html}</div>", unsafe_allow_html=True)
+
+            # 4. Collapsible Expander for Tool Execution Trace
+            if turn:
+                total_ms = turn.latency_breakdown.get('total_ms', 0) if turn.latency_breakdown else 0
+                with st.expander(f"Inspect Tool Trace & Evidence JSON ({total_ms:.0f} ms total)", expanded=False):
+                    col_tr1, col_tr2 = st.columns([1, 1])
+                    with col_tr1:
+                        st.markdown("**Dispatched Tools:**")
+                        if turn.parsed_intent and turn.parsed_intent.selected_tools:
+                            tool_names = [tc.tool_name for tc in turn.parsed_intent.selected_tools]
+                            st.markdown(tool_tiles_html(tool_names), unsafe_allow_html=True)
+                            for tc in turn.parsed_intent.selected_tools:
+                                st.caption(f"`{tc.tool_name}` (Params: `{tc.parameters}`)")
+                        else:
+                            st.markdown("*(Zero tools dispatched)*")
+
+                        st.markdown("**Latency Breakdown:**")
+                        lat = turn.latency_breakdown or {}
+                        st.markdown(f"- Intent Parsing: `{lat.get('intent_ms', 0):.1f} ms`")
+                        st.markdown(f"- DSP Compute: `{lat.get('dsp_ms', 0):.1f} ms`")
+                        st.markdown(f"- Grounded Synthesis: `{lat.get('synthesis_ms', 0):.1f} ms`")
+                        st.markdown(f"- Citation Audit: `{lat.get('validation_ms', 0):.1f} ms`")
+
+                    with col_tr2:
+                        st.markdown("**Calculated Evidence Metrics:**")
+                        if turn.evidence and turn.evidence.consolidated_metrics:
+                            st.json(turn.evidence.consolidated_metrics)
+                        else:
+                            st.caption("No numerical evidence extracted.")
+
+        elif st.session_state.audio_waveform is not None:
+            # Baseline Profile Card (when audio is loaded but before query execution)
+            prof = compute_initial_acoustic_profile(
+                st.session_state.audio_waveform,
+                st.session_state.audio_sr,
+            )
+            st.markdown(
+                f"""
+                <div class='profile-card'>
+                    <div class='profile-header'>INITIAL ACOUSTIC BASELINE PROFILE</div>
+                    <div class='profile-grid'>
+                        <div class='profile-stat-box'>
+                            <span class='profile-label'>SPECTRAL CENTROID</span>
+                            <span class='profile-val'>{prof['centroid_hz']:.1f} Hz</span>
+                            <span class='profile-hint'>{prof['perceptual_band']}</span>
+                        </div>
+                        <div class='profile-stat-box'>
+                            <span class='profile-label'>SPECTRAL FLATNESS</span>
+                            <span class='profile-val'>{prof['flatness']:.4f}</span>
+                            <span class='profile-hint'>{prof['texture']}</span>
+                        </div>
+                        <div class='profile-stat-box'>
+                            <span class='profile-label'>RMS LEVEL</span>
+                            <span class='profile-val'>{prof['rms_dbfs']:.1f} dBFS</span>
+                            <span class='profile-hint'>Dynamic Baseline</span>
+                        </div>
+                        <div class='profile-stat-box'>
+                            <span class='profile-label'>GROUNDING STATUS</span>
+                            <span class='profile-val' style='color: var(--teal);'>STANDBY</span>
+                            <span class='profile-hint'>Ready for Deterministic Audit</span>
+                        </div>
+                    </div>
+                    <div class='profile-footer'>
+                        Altar Ready: Enter a question above to ignite the deterministic DSP tools and synthesis pipeline.
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        # 5. Visualisation Tabs (Spectrogram / Waveform / Telemetry) + thresholds legend
+        c_tab_spec, c_tab_wave, c_tab_tele = st.tabs(["STFT Spectrogram (Log)", "Waveform", "Telemetry"])
+
+        with c_tab_spec:
+            if st.session_state.audio_waveform is not None:
+                spec_fig = generate_interactive_spectrogram(
+                    st.session_state.audio_waveform,
+                    st.session_state.audio_sr,
+                )
+                st.plotly_chart(spec_fig, use_container_width=True, config={"displayModeBar": False})
+                st.markdown(
+                    """
+                    <div class='spec-legend-box'>
+                        <span class='spec-legend-title'>ACOUSTIC PERCEPTUAL THRESHOLDS:</span>
+                        <span class='spec-legend-item'><span class='legend-line amethyst-dash'>--</span> <b>1.5 kHz</b>: Warm Midrange / Upper-Mid Boundary (Perceptual Anchor: <code>src/tools/spectral.py:59</code>)</span>
+                        <span class='spec-legend-item'><span class='legend-line teal-dash'>--</span> <b>4.0 kHz</b>: Crisp Presence / Treble-Dominant Ceiling (Perceptual Anchor: <code>src/tools/spectral.py:64</code>)</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.info("Dataset loaded. Spectrogram displays individual audio files.")
+
+        with c_tab_wave:
+            if st.session_state.audio_waveform is not None:
+                col_w1, col_w2 = st.columns([1, 3])
+                with col_w1:
+                    wf_view = st.radio(
+                        "Waveform Range:",
+                        ["20 ms Zoom", "Full Signal"],
+                        horizontal=True,
+                        label_visibility="collapsed",
+                        key="wf_view_range_select",
+                    )
+                wave_fig = generate_interactive_waveform(
+                    st.session_state.audio_waveform,
+                    st.session_state.audio_sr,
+                    zoom_ms=20.0 if wf_view == "20 ms Zoom" else None,
+                )
+                st.plotly_chart(wave_fig, use_container_width=True, config={"displayModeBar": False})
+            else:
+                st.info("Dataset loaded. Waveform displays individual audio files.")
+
+        with c_tab_tele:
+            if st.session_state.audio_metadata is not None and st.session_state.audio_waveform is not None:
+                meta = st.session_state.audio_metadata
+                subtype_val = getattr(meta, "subtype", "PCM (Float32)")
+                is_clipped = getattr(meta, "is_clipped", False)
+                is_silent = getattr(meta, "is_silent", meta.rms_dbfs < -60.0)
+
+                # Silence Ratio calculation
+                silence_threshold = 10 ** (-60.0 / 20.0)
+                silent_sample_count = np.sum(np.abs(st.session_state.audio_waveform) < silence_threshold)
+                silence_ratio = float(silent_sample_count / len(st.session_state.audio_waveform))
+                silence_ratio_pct = f"{silence_ratio * 100.0:.1f}%"
+                silence_caption = "High silence / muted" if is_silent else "Audible continuous energy"
+
+                st.markdown(
+                    f"""
+                    <div class='ender-stat-grid' style='grid-template-columns: repeat(2, 1fr); margin-top: 6px;'>
+                        <div class='ender-stat-box'>
+                            <span class='stat-label'>NYQUIST LIMIT</span>
+                            <span class='stat-value'>{meta.sample_rate // 2} Hz</span>
+                        </div>
+                        <div class='ender-stat-box'>
+                            <span class='stat-label'>CHANNELS</span>
+                            <span class='stat-value'>{meta.num_channels} ({'Mono' if meta.num_channels == 1 else 'Stereo'})</span>
+                        </div>
+                        <div class='ender-stat-box'>
+                            <span class='stat-label'>BIT DEPTH / FORMAT</span>
+                            <span class='stat-value'>{subtype_val}</span>
+                        </div>
+                        <div class='ender-stat-box'>
+                            <span class='stat-label'>TOTAL SAMPLES</span>
+                            <span class='stat-value'>{len(st.session_state.audio_waveform):,}</span>
+                        </div>
+                        <div class='ender-stat-box'>
+                            <span class='stat-label'>DYNAMIC HEADROOM</span>
+                            <span class='stat-value'>{abs(meta.rms_dbfs):.2f} dB</span>
+                        </div>
+                        <div class='ender-stat-box'>
+                            <span class='stat-label'>CLIPPING STATUS</span>
+                            <span class='stat-value'>{'🚨 Detected' if is_clipped else '✔ 0 clipped'}</span>
+                        </div>
+                        <div class='ender-stat-box' style='grid-column: span 2;'>
+                            <span class='stat-label'>SILENCE RATIO</span>
+                            <span class='stat-value'>{silence_ratio_pct} <span style='font-size: 11px; color: var(--cream); font-weight: normal;'>({silence_caption})</span></span>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption("Awaiting audio upload for telemetry inspection.")
+
+        # 6. Earlier Session Turns Expander (Placed Below Plots - Item 6)
+        if len(st.session_state.messages) > 2:
+            with st.expander(f"Earlier Session Turns ({len(st.session_state.messages)//2 - 1})", expanded=False):
+                for msg in st.session_state.messages[:-2]:
+                    with st.chat_message(msg["role"]):
+                        st.markdown(msg["content"])
+
 
