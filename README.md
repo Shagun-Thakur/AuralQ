@@ -13,7 +13,7 @@
 **Talk to your audio without the hallucinations.**  
 *A deterministic, tool-augmented audio intelligence architecture engineered to run locally on budget consumer hardware.*
 
-[Quickstart](#quickstart) • [Studio Tour](#interactive-studio-cockpit) • [Architecture](docs/SYSTEM_ARCHITECTURE.md) • [User Guide](docs/USER_AND_DEPLOYMENT_GUIDE.md) • [Baselines B1–B4](#benchmark-results)
+[Quickstart](#quickstart) • [Studio Tour](https://auralq-r77uc2bkz7wgu7yifqkduu.streamlit.app/) • [Architecture](docs/SYSTEM_ARCHITECTURE.md) • [User Guide](docs/USER_AND_DEPLOYMENT_GUIDE.md) • [Baselines B1–B4](#benchmark-results)
 
 </div>
 
