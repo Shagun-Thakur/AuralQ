@@ -137,12 +137,32 @@ div[data-testid="stFileUploaderDropzone"],
 .tool-tile, .citation-verified, .citation-repaired,
 div[data-baseweb="tab-list"], div[data-baseweb="tab"],
 .stTabs [data-baseweb="tab"],
+div[role="tablist"], button[role="tab"], div[data-testid="stTabs"], [data-testid="stTab"],
 [data-testid="stChatMessage"],
 .stAlert, [data-testid="stAlert"],
 .dormant-altar-box,
 .ender-stat-box, .active-audio-badge,
 audio, code, pre {
     border-radius: 0px !important;
+}
+
+/* =========================================================================
+   UNIVERSAL MATERIAL ICONS & SYMBOLS PROTECTION
+   Prevents font-family rules from overriding icon font ligatures (e.g. "upload")
+   ========================================================================= */
+[data-testid="stIconMaterial"],
+[data-testid="stIconMaterial"] *,
+.material-symbols-rounded,
+.material-symbols-outlined,
+.material-symbols-sharp,
+[class*="material-symbols"] {
+    font-family: "Material Symbols Rounded", "Material Symbols Outlined", "Material Symbols", monospace !important;
+    font-feature-settings: "liga" 1 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    white-space: nowrap !important;
+    word-wrap: normal !important;
+    direction: ltr !important;
 }
 
 /* =========================================================================
@@ -361,7 +381,7 @@ section[data-testid="stSidebar"] h3,
     margin-bottom: 10px;
 }
 
-/* Single quiet border for expanders: Outer container is transparent, only <details> has border (Item 7) */
+/* Single quiet border for expanders: Outer container is transparent, only <details> has border */
 div[data-testid="stExpander"] {
     background-color: transparent !important;
     border: none !important;
@@ -371,6 +391,7 @@ div[data-testid="stExpander"] {
     margin-bottom: 8px !important;
 }
 
+div[data-testid="stExpander"] details,
 div[data-testid="stExpander"] > details {
     background-color: var(--surface) !important;
     border: 1px solid var(--border-quiet) !important;
@@ -386,12 +407,33 @@ div[data-testid="stExpander"] summary {
     color: var(--cream) !important;
     padding: 8px 12px !important;
     border-radius: 0px !important;
+    cursor: pointer !important;
+}
+
+div[data-testid="stExpander"] summary:hover {
+    color: #FFFFFF !important;
+    background-color: var(--surface-hover) !important;
+}
+
+div[data-testid="stExpander"] summary svg,
+div[data-testid="stExpander"] summary [data-testid="stIconMaterial"] {
+    color: var(--muted) !important;
+    fill: var(--muted) !important;
 }
 
 div[data-testid="stExpander"] [data-testid="stExpanderDetails"] {
     background-color: var(--surface) !important;
     padding: 10px 12px !important;
     border-radius: 0px !important;
+    color: var(--body-text) !important;
+    font-size: 11px !important;
+    line-height: 1.5 !important;
+}
+
+div[data-testid="stExpander"] [data-testid="stExpanderDetails"] p,
+div[data-testid="stExpander"] [data-testid="stExpanderDetails"] li {
+    font-size: 11px !important;
+    line-height: 1.5 !important;
 }
 
 /* =========================================================================
@@ -406,20 +448,36 @@ div[data-testid="stFileUploaderDropzone"] {
     padding: 6px 8px !important;
 }
 
-section[data-testid="stFileUploaderDropzone"] [data-testid="stFileUploaderDropzoneInstructions"] {
+/* Instruction text inside dropzone: Always visible, never hidden by responsive container query */
+section[data-testid="stFileUploaderDropzone"] [data-testid="stFileUploaderDropzoneInstructions"],
+div[data-testid="stFileUploaderDropzone"] [data-testid="stFileUploaderDropzoneInstructions"],
+[data-testid="stFileUploaderDropzoneInstructions"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
     padding: 0 4px !important;
 }
 
-section[data-testid="stFileUploaderDropzone"] small,
-div[data-testid="stFileUploaderDropzone"] small,
-section[data-testid="stFileUploaderDropzone"] span,
-div[data-testid="stFileUploaderDropzone"] span {
+section[data-testid="stFileUploaderDropzone"] [data-testid="stFileUploaderDropzoneInstructions"] span,
+div[data-testid="stFileUploaderDropzone"] [data-testid="stFileUploaderDropzoneInstructions"] span,
+section[data-testid="stFileUploaderDropzone"] [data-testid="stFileUploaderDropzoneInstructions"] small,
+div[data-testid="stFileUploaderDropzone"] [data-testid="stFileUploaderDropzoneInstructions"] small,
+[data-testid="stFileUploaderDropzoneInstructions"] span,
+[data-testid="stFileUploaderDropzoneInstructions"] small {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
     font-size: 11px !important;
     line-height: 1.3 !important;
     color: var(--cream) !important;
+    font-family: var(--mono) !important;
 }
 
-/* Browse files button inside dropzone: Prominent >= 12px with comfortable padding (Item 2) */
+/* Browse files button inside dropzone: Prominent >= 12px with comfortable padding */
 section[data-testid="stFileUploaderDropzone"] button,
 div[data-testid="stFileUploaderDropzone"] button {
     background-color: var(--surface) !important;
@@ -432,12 +490,24 @@ div[data-testid="stFileUploaderDropzone"] button {
     padding: 8px 14px !important;
     min-height: 36px !important;
     margin: 4px 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+}
+
+/* Hide the material icon ligature inside the uploader button to prevent "uploAload" collision */
+section[data-testid="stFileUploaderDropzone"] button [data-testid="stIconMaterial"],
+div[data-testid="stFileUploaderDropzone"] button [data-testid="stIconMaterial"],
+section[data-testid="stFileUploaderDropzone"] button [class*="material"],
+div[data-testid="stFileUploaderDropzone"] button [class*="material"] {
+    display: none !important;
 }
 
 section[data-testid="stFileUploaderDropzone"] button p,
 div[data-testid="stFileUploaderDropzone"] button p,
-section[data-testid="stFileUploaderDropzone"] button span,
-div[data-testid="stFileUploaderDropzone"] button span {
+section[data-testid="stFileUploaderDropzone"] button span:not([data-testid="stIconMaterial"]):not([class*="material"]),
+div[data-testid="stFileUploaderDropzone"] button span:not([data-testid="stIconMaterial"]):not([class*="material"]) {
     font-family: var(--pixel) !important;
     font-size: 12px !important;
     color: inherit !important;
@@ -496,6 +566,49 @@ div[data-baseweb="textarea"]:has(textarea:focus) {
 .stTextArea textarea::placeholder, .stTextInput input::placeholder {
     color: var(--muted) !important;
     font-family: var(--mono) !important;
+}
+
+/* Password visibility toggle button & eye icon */
+div[data-baseweb="base-input"] button,
+[data-testid="stTextInput"] button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--muted) !important;
+    padding: 0 8px !important;
+}
+div[data-baseweb="base-input"] button:hover,
+[data-testid="stTextInput"] button:hover {
+    color: var(--cream) !important;
+    background: transparent !important;
+}
+div[data-baseweb="base-input"] button svg,
+[data-testid="stTextInput"] button svg {
+    fill: currentColor !important;
+    stroke: currentColor !important;
+}
+
+/* Selectbox Dropdown Menu & Popover */
+div[data-baseweb="select"] svg {
+    fill: var(--cream) !important;
+    color: var(--cream) !important;
+}
+div[data-baseweb="popover"], div[data-baseweb="menu"], ul[role="listbox"] {
+    background-color: var(--surface) !important;
+    border: 1px solid var(--border-quiet) !important;
+    border-radius: 0px !important;
+    box-shadow: 0 4px 12px var(--shadow-dark) !important;
+}
+div[data-baseweb="menu"] li, ul[role="listbox"] li, [role="option"] {
+    background-color: transparent !important;
+    color: var(--cream) !important;
+    font-family: var(--mono) !important;
+    font-size: 11px !important;
+    padding: 6px 10px !important;
+}
+div[data-baseweb="menu"] li:hover, ul[role="listbox"] li:hover, [role="option"]:hover, [role="option"][aria-selected="true"] {
+    background-color: var(--surface-hover) !important;
+    color: #FFFFFF !important;
 }
 
 /* =========================================================================
@@ -610,47 +723,96 @@ div[data-testid="stFormSubmitButton"] > button {
 /* =========================================================================
    10. TABS (Neutral Inactive, Purple Active Accent)
    ========================================================================= */
-div[data-baseweb="tab-list"], .stTabs [data-baseweb="tab-list"] {
-    gap: 4px;
+/* Tab List Bar: BaseWeb [data-baseweb="tab-list"] & Native div[role="tablist"], [data-testid="stTabs"] */
+div[role="tablist"],
+div[data-testid="stTabs"] > div:first-child,
+div[data-baseweb="tab-list"],
+.stTabs [data-baseweb="tab-list"] {
+    gap: 4px !important;
     border-bottom: 1px solid var(--border-quiet) !important;
+    background: transparent !important;
 }
 
-.stTabs [data-baseweb="tab"] {
+/* Inactive Tab Button */
+button[role="tab"],
+button[data-testid="stTab"],
+div[role="tab"],
+.stTabs [data-baseweb="tab"],
+div[data-baseweb="tab"] {
     background-color: var(--surface) !important;
     border: 1px solid var(--border-quiet) !important;
     border-bottom: none !important;
     border-radius: 0px !important;
     color: var(--cream) !important;
     padding: 7px 12px !important;
+    box-shadow: none !important;
+    transition: background-color 0.15s ease, border-color 0.15s ease !important;
 }
 
+button[role="tab"] p,
+button[role="tab"] span:not([data-testid="stIconMaterial"]):not([class*="material"]),
+button[data-testid="stTab"] p,
+button[data-testid="stTab"] span:not([data-testid="stIconMaterial"]):not([class*="material"]),
+div[role="tab"] p,
 .stTabs [data-baseweb="tab"] p {
     font-family: var(--pixel) !important;
     font-size: 10px !important;
     font-weight: 600 !important;
-    line-height: 1.3;
-    margin: 0;
+    line-height: 1.3 !important;
+    margin: 0 !important;
     color: var(--cream) !important;
 }
 
+/* Hover Tab */
+button[role="tab"]:hover,
+button[data-testid="stTab"]:hover,
+div[role="tab"]:hover,
 .stTabs [data-baseweb="tab"]:hover {
     color: #FFFFFF !important;
     border-color: var(--portal) !important;
+    background-color: var(--surface-hover) !important;
 }
 
+button[role="tab"]:hover p,
+button[role="tab"]:hover span:not([data-testid="stIconMaterial"]):not([class*="material"]),
+button[data-testid="stTab"]:hover p,
+button[data-testid="stTab"]:hover span:not([data-testid="stIconMaterial"]):not([class*="material"]),
+.stTabs [data-baseweb="tab"]:hover p {
+    color: #FFFFFF !important;
+}
+
+/* Active / Selected Tab */
+button[role="tab"][aria-selected="true"],
+button[data-testid="stTab"][aria-selected="true"],
+div[role="tab"][aria-selected="true"],
 .stTabs [aria-selected="true"] {
     background-color: #1F142E !important;
     border-color: var(--portal) !important;
     border-top: 2px solid var(--amethyst) !important;
+    border-bottom: 1px solid #1F142E !important;
+    margin-bottom: -1px !important;
+    color: #FFFFFF !important;
 }
 
+button[role="tab"][aria-selected="true"] p,
+button[role="tab"][aria-selected="true"] span:not([data-testid="stIconMaterial"]):not([class*="material"]),
+button[data-testid="stTab"][aria-selected="true"] p,
+button[data-testid="stTab"][aria-selected="true"] span:not([data-testid="stIconMaterial"]):not([class*="material"]),
 .stTabs [aria-selected="true"] p {
     color: #FFFFFF !important;
 }
 
+/* BaseWeb tab highlight (older Streamlit) */
 .stTabs [data-baseweb="tab-highlight"] {
     background-color: var(--portal) !important;
     height: 3px !important;
+}
+
+/* Modern Streamlit highlight bar reset */
+button[role="tab"]::after,
+button[data-testid="stTab"]::after {
+    background-color: transparent !important;
+    display: none !important;
 }
 
 /* =========================================================================
@@ -1354,11 +1516,100 @@ section[data-testid="stSidebar"] .stDownloadButton button *::-webkit-scrollbar {
     height: 0 !important;
 }
 
-/* Alerts restyled to neutral palette */
+/* Cloud Key Badges */
+.cloud-key-badge {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    margin: 4px 0 8px 0;
+    box-sizing: border-box;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    border-radius: 0px;
+}
+.cloud-key-badge.cloud-key-connected {
+    background-color: #0D221C;
+    border: 1px solid #1A5E4E;
+    color: var(--teal);
+    box-shadow: inset 1px 1px 0px rgba(61, 255, 196, 0.1);
+}
+.cloud-key-badge.cloud-key-missing {
+    background-color: #1A1215;
+    border: 1px solid #5A2630;
+    color: var(--redstone);
+    box-shadow: inset 1px 1px 0px rgba(255, 77, 109, 0.1);
+}
+.cloud-key-badge code {
+    font-family: var(--mono);
+    color: inherit;
+    background: transparent;
+    padding: 0;
+}
+
+/* Alerts restyled to neutral Ender palette */
 .stAlert, [data-testid="stAlert"] {
     background-color: var(--surface) !important;
     border: 1px solid var(--border-quiet) !important;
     color: var(--body-text) !important;
+    font-family: var(--mono) !important;
+    font-size: 11px !important;
+    border-radius: 0px !important;
+}
+.stAlert [data-testid="stMarkdownContainer"] p,
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] p,
+.stAlert [data-testid="stMarkdownContainer"] li,
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] li {
+    font-family: var(--mono) !important;
+    font-size: 11px !important;
+    color: var(--body-text) !important;
+    line-height: 1.5 !important;
+}
+.stAlert svg, [data-testid="stAlert"] svg {
+    color: var(--amethyst) !important;
+    fill: var(--amethyst) !important;
+}
+
+/* Sidebar Link Button (GitHub repo button in expander) */
+section[data-testid="stSidebar"] .stLinkButton,
+section[data-testid="stSidebar"] [data-testid="stLinkButton"] {
+    width: 100% !important;
+    margin: 8px 0 !important;
+}
+section[data-testid="stSidebar"] .stLinkButton > a,
+section[data-testid="stSidebar"] [data-testid="stLinkButton"] > a {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    min-height: 36px !important;
+    box-sizing: border-box !important;
+    background-color: var(--surface) !important;
+    border: 1px solid var(--border-quiet) !important;
+    box-shadow: inset 1px 1px 0px #2D243A, inset -1px -1px 0px var(--shadow-dark) !important;
+    color: var(--cream) !important;
+    text-decoration: none !important;
+    font-family: var(--mono) !important;
+    font-size: 11px !important;
+    padding: 8px 10px !important;
+    text-align: center !important;
+    border-radius: 0px !important;
+}
+section[data-testid="stSidebar"] .stLinkButton > a:hover,
+section[data-testid="stSidebar"] [data-testid="stLinkButton"] > a:hover {
+    background-color: var(--surface-hover) !important;
+    border-color: var(--portal) !important;
+    color: #FFFFFF !important;
+    text-decoration: none !important;
+}
+
+/* Sidebar Captions */
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+section[data-testid="stSidebar"] .stCaption {
+    color: var(--cream) !important;
+    font-family: var(--mono) !important;
+    font-size: 11px !important;
+    line-height: 1.4 !important;
 }
 
 /* Scrollbars */

@@ -82,8 +82,8 @@ def format_relative_time(timestamp: Optional[float]) -> str:
 # State Initialization
 # ---------------------------------------------------------------------------
 
-# Deployment environment detection: True when hosted on Streamlit Community Cloud
-IS_CLOUD_DEPLOYMENT = Path("/mount/src").exists()
+# Deployment environment detection: True when hosted on Streamlit Community Cloud (or forced via AURALQ_FORCE_CLOUD)
+IS_CLOUD_DEPLOYMENT = Path("/mount/src").exists() or os.environ.get("AURALQ_FORCE_CLOUD", "").lower() in ("1", "true")
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())[:8]
@@ -374,11 +374,11 @@ with st.sidebar:
             pass
 
         if server_key:
-            st.success(f"🔑 **Hosted `{env_var_name}` Connected**")
-            custom_key = st.text_input("Custom Key Override (Optional / Session RAM):", type="password", placeholder="Leave blank to use default host key")
+            st.markdown(f"<div class='cloud-key-badge cloud-key-connected'>✦ Hosted <code>{html.escape(env_var_name)}</code> Connected</div>", unsafe_allow_html=True)
+            custom_key = st.text_input("Custom Key Override (Optional):", type="password", placeholder="Leave blank to use default host key")
             st.session_state.cloud_api_key = custom_key if custom_key else server_key
         else:
-            st.caption(f"🔑 **No `{env_var_name}` configured on host**")
+            st.markdown(f"<div class='cloud-key-badge cloud-key-missing'>✦ No <code>{html.escape(env_var_name)}</code> configured on host</div>", unsafe_allow_html=True)
             custom_key = st.text_input(
                 f"Enter {st.session_state.cloud_provider.title()} API Key:",
                 type="password",
@@ -462,11 +462,11 @@ with st.sidebar:
                 pass
 
             if server_key:
-                st.success(f"Default `{env_var_name}` Detected")
-                custom_key = st.text_input("Custom Key Override (Optional / Session RAM):", type="password", placeholder="Leave blank to use default key")
+                st.markdown(f"<div class='cloud-key-badge cloud-key-connected'>✦ Default <code>{html.escape(env_var_name)}</code> Detected</div>", unsafe_allow_html=True)
+                custom_key = st.text_input("Custom Key Override (Optional):", type="password", placeholder="Leave blank to use default key")
                 st.session_state.cloud_api_key = custom_key if custom_key else server_key
             else:
-                st.caption(f"No `{env_var_name}` configured on host")
+                st.markdown(f"<div class='cloud-key-badge cloud-key-missing'>✦ No <code>{html.escape(env_var_name)}</code> configured on host</div>", unsafe_allow_html=True)
                 custom_key = st.text_input(
                     f"Enter {st.session_state.cloud_provider.title()} API Key:",
                     type="password",
