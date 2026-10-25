@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 [![Tests Passing](https://img.shields.io/badge/Tests-74%2F74%20Passing-brightgreen?style=for-the-badge)](tests/)
 [![Grounding](https://img.shields.io/badge/Citation%20Grounding-99.0%25-teal?style=for-the-badge)](#benchmark-results)
-[![Privacy](https://img.shields.io/badge/Execution-100%25%20Air--Gapped-blueviolet?style=for-the-badge)](#dual-execution-modes)
+[![Privacy](https://img.shields.io/badge/Execution-100%25%20Air--Gapped-blueviolet?style=for-the-badge)](#quickstart)
 
 **Talk to your audio without the hallucinations.**  
 *A deterministic, tool-augmented audio intelligence architecture engineered to run locally on budget consumer hardware.*
@@ -19,7 +19,8 @@
 
 ---
 
-## 💡 What is AuralQ?
+<a id="what-is-auralq"></a>
+## What is AuralQ? 💡
 
 Audio signal processing (DSP) provides mathematically exact metrics about sound (dynamic range, spectral centroid, zero crossings, harmonic flatness). However, accessing and interpreting these metrics typically requires specialized engineering expertise. Conversely, emerging multimodal audio LLMs accept sound directly but routinely **hallucinate acoustic numbers**, behave as unverifiable black boxes, and require cloud APIs that jeopardize data privacy.
 
@@ -58,7 +59,8 @@ Audio signal processing (DSP) provides mathematically exact metrics about sound 
 
 ---
 
-## ⚡ Key Capabilities
+<a id="key-capabilities"></a>
+## Key Capabilities ⚡
 
 * 🛡️ **Zero Acoustic Hallucinations**: An independent numeric citation validator inspects every generated number against computed evidence. Discrepancies trigger automatic, deterministic self-healing repair.
 * 💻 **Budget Hardware Ready**: Architected to run entirely on a budget consumer laptop with a **4 GB VRAM GPU** (NVIDIA RTX 3050), requiring $<2.4\text{ GB}$ peak VRAM with end-to-end response times under **6 seconds**.
@@ -69,7 +71,8 @@ Audio signal processing (DSP) provides mathematically exact metrics about sound 
 
 ---
 
-## 🚀 Quickstart
+<a id="quickstart"></a>
+## Quickstart 🚀
 
 ### Option A: One-Click Desktop Launcher (Recommended)
 
@@ -105,7 +108,8 @@ streamlit run app/streamlit_app.py
 
 ---
 
-## 🎛️ Interactive Studio Cockpit
+<a id="interactive-studio-cockpit"></a>
+## Interactive Studio Cockpit 🎛️
 
 AuralQ features an asymmetric two-column workspace designed for natural workflow flow:
 
@@ -146,7 +150,8 @@ AuralQ features an asymmetric two-column workspace designed for natural workflow
 
 ---
 
-## 📊 Benchmark Results
+<a id="benchmark-results"></a>
+## Benchmark Results 📊
 
 AuralQ is empirically evaluated across 4 experimental baselines on 20 canonical acoustic benchmarks (`data/benchmark/cases.json`) on consumer hardware (AMD Ryzen 5 5600H, RTX 3050 4 GB, Ollama `llama3.2:3b-instruct-q4_K_M`):
 
@@ -162,7 +167,8 @@ AuralQ is empirically evaluated across 4 experimental baselines on 20 canonical 
 
 ---
 
-## 🔍 Detailed Reference & Specifications
+<a id="detailed-reference"></a>
+## Detailed Reference & Specifications 🔍
 
 <details>
 <summary><b>🛠️ Click to expand: The 8 Core DSP Analytical Tools</b></summary>
@@ -232,7 +238,8 @@ python -m pytest tests/ -v
 
 ---
 
-## 📖 In-Depth Documentation
+<a id="in-depth-documentation"></a>
+## In-Depth Documentation 📖
 
 For detailed technical and operational specifications, consult the master guides in the [`docs/`](docs/) directory:
 
@@ -241,7 +248,8 @@ For detailed technical and operational specifications, consult the master guides
 
 ---
 
-## 📄 License & Academic Attribution
+<a id="license"></a>
+## License & Academic Attribution 📄
 
 This project is developed as an undergraduate major project in Computer Science & Engineering.  
 Licensed under the [MIT License](LICENSE).
