@@ -134,3 +134,16 @@ def test_ephemeral_cloud_mode():
     assert db.get_session_turns("any_id") == []
     assert db.save_turn("any_id", None) is True
     assert db.delete_session("any_id") is True
+
+
+def test_cloud_environment_hard_disable(monkeypatch):
+    """Verify that cloud environment detection forcibly overrides enabled=True to False."""
+    monkeypatch.setenv("AURALQ_FORCE_CLOUD", "1")
+    db = SessionDatabase(enabled=True)
+    assert db.enabled is False
+    assert db.db_path is None
+    assert db.list_sessions() == []
+    assert db.get_session_turns("any_id") == []
+    assert db.save_turn("any_id", None) is True
+    assert db.create_or_update_session("any_id", "Title") is True
+    assert db.delete_session("any_id") is True

@@ -88,8 +88,10 @@ IS_CLOUD_DEPLOYMENT = Path("/mount/src").exists() or os.environ.get("AURALQ_FORC
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())[:8]
 
-if "engine_mode" not in st.session_state:
-    if IS_CLOUD_DEPLOYMENT or not check_ollama_status():
+if IS_CLOUD_DEPLOYMENT:
+    st.session_state.engine_mode = "Cloud Demo Mode"
+elif "engine_mode" not in st.session_state:
+    if not check_ollama_status():
         st.session_state.engine_mode = "Cloud Demo Mode"
     else:
         st.session_state.engine_mode = "Local Ollama (Private / Air-Gapped)"
@@ -124,8 +126,8 @@ if "messages" not in st.session_state:
 # Ensure built-in showcase samples exist
 SAMPLE_DIR = ensure_showcase_samples()
 
-# Is this a local private session?
-is_local_engine = "Local Ollama" in st.session_state.engine_mode
+# Is this a local private session? Strictly False in Cloud deployments (Zero DB persistence)
+is_local_engine = ("Local Ollama" in st.session_state.engine_mode) and not IS_CLOUD_DEPLOYMENT
 db = SessionDatabase(enabled=is_local_engine)
 
 
@@ -312,7 +314,6 @@ with st.sidebar:
                     if st.button(btn_label, key=f"sess_{s['session_id']}", use_container_width=True):
                         # Load session turns
                         st.session_state.session_id = s["session_id"]
-                        st.session_state.active_audio_path = s["audio_path"]
                         turns = db.get_session_turns(s["session_id"])
                         st.session_state.messages = []
                         for t in turns:
@@ -322,16 +323,55 @@ with st.sidebar:
                                 "content": t.response_text,
                                 "turn": t,
                             })
-                        # Reload audio if path exists
-                        if s["audio_path"] and Path(s["audio_path"]).exists():
-                            if s["is_dataset"]:
-                                st.session_state.active_dataset_path = s["audio_path"]
-                            else:
-                                res = load_audio_file(s["audio_path"])
+
+                        # Resolve audio path (from session or recovered from turn evidence)
+                        audio_p = s.get("audio_path")
+                        if not audio_p and turns:
+                            for t in reversed(turns):
+                                if t.evidence and t.evidence.audio_metadata and t.evidence.audio_metadata.file_path:
+                                    cand = t.evidence.audio_metadata.file_path
+                                    if Path(cand).exists():
+                                        audio_p = cand
+                                        break
+                                elif t.evidence and t.evidence.audio_id and Path(t.evidence.audio_id).exists():
+                                    audio_p = t.evidence.audio_id
+                                    break
+                            if audio_p and is_local_engine:
+                                db.create_or_update_session(
+                                    session_id=s["session_id"],
+                                    title=s["title"],
+                                    audio_path=audio_p,
+                                    is_dataset=bool(s.get("is_dataset")),
+                                )
+
+                        # Update audio / dataset states cleanly
+                        if s.get("is_dataset"):
+                            st.session_state.active_dataset_path = audio_p
+                            st.session_state.active_audio_path = None
+                            st.session_state.audio_metadata = None
+                            st.session_state.audio_waveform = None
+                            st.session_state.audio_sr = None
+                            st.session_state._last_uploaded_name = None
+                        else:
+                            st.session_state.active_dataset_path = None
+                            st.session_state.active_audio_path = audio_p
+                            if audio_p and Path(audio_p).exists():
+                                res = load_audio_file(audio_p)
                                 if res.status == "SUCCESS":
                                     st.session_state.audio_metadata = res.metadata
                                     st.session_state.audio_waveform = res.waveform
                                     st.session_state.audio_sr = res.sample_rate
+                                    st.session_state._last_uploaded_name = Path(audio_p).name
+                                else:
+                                    st.session_state.audio_metadata = None
+                                    st.session_state.audio_waveform = None
+                                    st.session_state.audio_sr = None
+                                    st.session_state._last_uploaded_name = None
+                            else:
+                                st.session_state.audio_metadata = None
+                                st.session_state.audio_waveform = None
+                                st.session_state.audio_sr = None
+                                st.session_state._last_uploaded_name = None
                         st.rerun()
 
                 with col_del:
@@ -531,7 +571,12 @@ def execute_acoustic_pipeline(query_text: str):
             "turn": resp.turn_record,
         })
         if is_local_engine and resp.turn_record:
-            db.save_turn(st.session_state.session_id, resp.turn_record)
+            db.save_turn(
+                session_id=st.session_state.session_id,
+                turn=resp.turn_record,
+                audio_path=st.session_state.active_audio_path or st.session_state.active_dataset_path,
+                is_dataset=bool(st.session_state.active_dataset_path),
+            )
         st.rerun()
 
 
@@ -557,8 +602,10 @@ with col_left:
     )
     if uploaded_file is not None:
         if getattr(st.session_state, "_last_uploaded_name", None) != uploaded_file.name:
-            temp_upload_path = Path("data/samples/uploaded_active.wav")
-            temp_upload_path.parent.mkdir(parents=True, exist_ok=True)
+            uploads_dir = Path("data/samples/uploads")
+            uploads_dir.mkdir(parents=True, exist_ok=True)
+            safe_name = f"{st.session_state.session_id}_{uploaded_file.name}"
+            temp_upload_path = uploads_dir / safe_name
             with open(temp_upload_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
@@ -570,6 +617,12 @@ with col_left:
                 st.session_state.audio_metadata = res.metadata
                 st.session_state.audio_waveform = res.waveform
                 st.session_state.audio_sr = res.sample_rate
+                if is_local_engine:
+                    db.create_or_update_session(
+                        session_id=st.session_state.session_id,
+                        title=f"Audio: {uploaded_file.name}",
+                        audio_path=str(temp_upload_path.resolve()),
+                    )
                 st.toast(f"Loaded {uploaded_file.name}!", icon="✅")
                 st.rerun()
             else:
@@ -587,6 +640,12 @@ with col_left:
             st.session_state.audio_metadata = res.metadata
             st.session_state.audio_waveform = res.waveform
             st.session_state.audio_sr = res.sample_rate
+            if is_local_engine:
+                db.create_or_update_session(
+                    session_id=st.session_state.session_id,
+                    title="1k Sine Session",
+                    audio_path=str(p.resolve()),
+                )
             st.rerun()
     with col_p2:
         if st.button("Snare", use_container_width=True):
@@ -598,6 +657,12 @@ with col_left:
             st.session_state.audio_metadata = res.metadata
             st.session_state.audio_waveform = res.waveform
             st.session_state.audio_sr = res.sample_rate
+            if is_local_engine:
+                db.create_or_update_session(
+                    session_id=st.session_state.session_id,
+                    title="Snare Session",
+                    audio_path=str(p.resolve()),
+                )
             st.rerun()
     with col_p3:
         if st.button("Noise", use_container_width=True):
@@ -609,11 +674,17 @@ with col_left:
             st.session_state.audio_metadata = res.metadata
             st.session_state.audio_waveform = res.waveform
             st.session_state.audio_sr = res.sample_rate
+            if is_local_engine:
+                db.create_or_update_session(
+                    session_id=st.session_state.session_id,
+                    title="Noise Session",
+                    audio_path=str(p.resolve()),
+                )
             st.rerun()
 
     # 3. Audio Playback & 4-Box Ender Stat Grid (When Audio Active)
     if st.session_state.active_audio_path and st.session_state.audio_waveform is not None:
-        if getattr(st.session_state, "_last_uploaded_name", None) and "uploaded_active" in Path(st.session_state.active_audio_path).name:
+        if getattr(st.session_state, "_last_uploaded_name", None):
             active_name = st.session_state._last_uploaded_name
         else:
             active_name = Path(st.session_state.active_audio_path).name
@@ -681,6 +752,13 @@ with col_left:
                 st.session_state.active_audio_path = None
                 st.session_state.audio_metadata = None
                 st.session_state.audio_waveform = None
+                if is_local_engine:
+                    db.create_or_update_session(
+                        session_id=st.session_state.session_id,
+                        title="Sample Dataset Audit",
+                        audio_path=str(sample_dataset_dir.resolve()),
+                        is_dataset=True,
+                    )
                 st.rerun()
 
         dataset_input = st.text_input(
@@ -695,6 +773,13 @@ with col_left:
                 st.session_state.active_audio_path = None
                 st.session_state.audio_metadata = None
                 st.session_state.audio_waveform = None
+                if is_local_engine:
+                    db.create_or_update_session(
+                        session_id=st.session_state.session_id,
+                        title="Dataset Audit",
+                        audio_path=str(p.resolve()),
+                        is_dataset=True,
+                    )
                 st.success(f"Active dataset: `{p.resolve()}`")
                 st.rerun()
 
@@ -714,6 +799,8 @@ with col_right:
     with st.form("left_query_form", clear_on_submit=False):
         if has_audio:
             placeholder_text = "Enter acoustic question (e.g. Is there background noise? Calculate spectral centroid)..."
+        elif len(st.session_state.messages) > 0:
+            placeholder_text = "Reviewing past session. Ingest audio via Hopper or Hotbar to run new queries..."
         else:
             placeholder_text = "Select a Hotbar Preset (1k Sine / Snare / Noise) or drop an audio file in the Hopper to ignite the altar..."
 
@@ -741,7 +828,7 @@ with col_right:
             latest_assistant_msg = msg
             break
 
-    if not has_audio:
+    if not has_audio and not latest_assistant_msg:
         # EMPTY STATE: ONE unified standby panel only (Item 5)
         st.markdown(
             """
@@ -756,6 +843,10 @@ with col_right:
             unsafe_allow_html=True,
         )
     else:
+        # Optional notice if reviewing past session turns where audio is not active
+        if not has_audio and latest_assistant_msg:
+            st.info("Displaying historical session audit. Load an audio clip via Hopper or Hotbar to run new queries.")
+
         # 2. Grounding banner + plain-language verification line + Answer Panel
         if latest_assistant_msg:
             turn: Optional[TurnRecord] = latest_assistant_msg.get("turn")
@@ -889,8 +980,10 @@ with col_right:
                     """,
                     unsafe_allow_html=True,
                 )
-            else:
+            elif st.session_state.active_dataset_path:
                 st.info("Dataset loaded. Spectrogram displays individual audio files.")
+            else:
+                st.caption("Awaiting audio signal for spectrogram rendering.")
 
         with c_tab_wave:
             if st.session_state.audio_waveform is not None:
@@ -909,8 +1002,10 @@ with col_right:
                     zoom_ms=20.0 if wf_view == "20 ms Zoom" else None,
                 )
                 st.plotly_chart(wave_fig, use_container_width=True, config={"displayModeBar": False})
-            else:
+            elif st.session_state.active_dataset_path:
                 st.info("Dataset loaded. Waveform displays individual audio files.")
+            else:
+                st.caption("Awaiting audio signal for waveform rendering.")
 
         with c_tab_tele:
             if st.session_state.audio_metadata is not None and st.session_state.audio_waveform is not None:

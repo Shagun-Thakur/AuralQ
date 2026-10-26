@@ -6,6 +6,7 @@ mode for Cloud Demo deployments to guarantee zero server-side data retention.
 """
 
 import json
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -13,6 +14,11 @@ from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from src.agent.schemas import TurnRecord
 from src.agent.state import SessionState
+
+
+def is_cloud_environment() -> bool:
+    """Detect if running in a public Cloud deployment (e.g. Streamlit Community Cloud or AURALQ_FORCE_CLOUD)."""
+    return Path("/mount/src").exists() or os.environ.get("AURALQ_FORCE_CLOUD", "").lower() in ("1", "true")
 
 
 class SessionDatabase:
@@ -27,6 +33,10 @@ class SessionDatabase:
         db_path: Optional[str | Path] = None,
         enabled: bool = True,
     ):
+        # Strict guarantee: Zero database retention in cloud deployments
+        if is_cloud_environment():
+            enabled = False
+
         self.enabled = enabled
         if self.enabled:
             self.db_path = Path(db_path or "data/auralq_sessions.db")
@@ -78,6 +88,28 @@ class SessionDatabase:
                 CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions(created_at DESC);
             """)
 
+            # Backfill legacy sessions where audio_path was not recorded
+            try:
+                null_rows = conn.execute(
+                    "SELECT session_id FROM sessions WHERE audio_path IS NULL"
+                ).fetchall()
+                for r in null_rows:
+                    sid = r["session_id"]
+                    t_row = conn.execute(
+                        "SELECT evidence_json FROM turns WHERE session_id = ? AND evidence_json IS NOT NULL ORDER BY turn_id DESC LIMIT 1",
+                        (sid,),
+                    ).fetchone()
+                    if t_row and t_row["evidence_json"]:
+                        ev = json.loads(t_row["evidence_json"])
+                        recovered_path = (ev.get("audio_metadata") or {}).get("file_path") or ev.get("audio_id")
+                        if recovered_path:
+                            conn.execute(
+                                "UPDATE sessions SET audio_path = ? WHERE session_id = ?",
+                                (recovered_path, sid),
+                            )
+            except Exception:
+                pass
+
     def create_or_update_session(
         self,
         session_id: str,
@@ -104,14 +136,32 @@ class SessionDatabase:
             )
         return True
 
-    def save_turn(self, session_id: str, turn: TurnRecord) -> bool:
+    def save_turn(
+        self,
+        session_id: str,
+        turn: TurnRecord,
+        audio_path: Optional[str] = None,
+        is_dataset: bool = False,
+    ) -> bool:
         """Persist a completed conversational turn into SQLite."""
-        if not self.enabled:
+        if not self.enabled or turn is None:
             return True
 
-        # Ensure parent session exists (only if not already created)
+        # If audio_path is not explicitly provided, attempt extraction from turn evidence
+        if audio_path is None and turn.evidence:
+            if turn.evidence.audio_metadata and turn.evidence.audio_metadata.file_path:
+                audio_path = turn.evidence.audio_metadata.file_path
+            elif turn.evidence.audio_id and Path(turn.evidence.audio_id).exists():
+                audio_path = turn.evidence.audio_id
+
+        # Ensure parent session exists and has its audio record linked
         title = turn.query[:40] + ("..." if len(turn.query) > 40 else "")
-        self.create_or_update_session(session_id=session_id, title=title)
+        self.create_or_update_session(
+            session_id=session_id,
+            title=title,
+            audio_path=audio_path,
+            is_dataset=is_dataset,
+        )
 
         intent_json = json.dumps(turn.parsed_intent.model_dump()) if turn.parsed_intent else None
         evidence_json = json.dumps(turn.evidence.model_dump()) if turn.evidence else None
