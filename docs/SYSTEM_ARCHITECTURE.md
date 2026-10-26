@@ -70,7 +70,7 @@ app/                # LAYER 5: Ender-Acoustic Console Cockpit & Visualization UI
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────┐
-│              LAYER 5: PRESENTATION & VISUALIZATION (Streamlit)               │
+│              LAYER 5: PRESENTATION & VISUALIZATION (Streamlit)                │
 │  • Asymmetric Ender-Acoustic Cockpit (Source Hotbar 37% : Conversation 63%)   │
 │  • Interactive Spectrogram (Sub-band ratios) & 20ms Waveform Canvas           │
 │  • Ephemeral Cloud vs. Air-Gapped Local Hardware State Management             │
@@ -86,21 +86,21 @@ app/                # LAYER 5: Ender-Acoustic Console Cockpit & Visualization UI
                                        │
 ┌──────────────────────────────────────▼────────────────────────────────────────┐
 │             LAYER 3: DETERMINISTIC DSP CORE & DATASET ADVISOR                 │
-│  • 8 Core DSP Tools (RMS, ZCR, Centroid, Bandwidth, Rolloff, Flatness, MFCC) │
+│  • 8 Core DSP Tools (RMS, ZCR, Centroid, Bandwidth, Rolloff, Flatness, MFCC)  │
 │  • Streaming Out-of-Core Dataset Profiler (Welford Online Accumulation)       │
-│  • Deterministic Preprocessing Decision Rules (Resample, Downmix, Declip)    │
+│  • Deterministic Preprocessing Decision Rules (Resample, Downmix, Declip)     │
 └──────────────────────────────────────┬────────────────────────────────────────┘
                                        │
 ┌──────────────────────────────────────▼────────────────────────────────────────┐
 │             LAYER 2: STRUCTURED LLM INTENT PARSING (Ollama)                   │
-│  • Pydantic v2 Schema Enforcement & Dynamic Tool Budget ($\le 3$ tools)        │
+│  • Pydantic v2 Schema Enforcement & Dynamic Tool Budget ($\le 3$ tools)       │
 │  • Single-Shot Prompt Construction & Self-Healing JSON Parser                 │
 │  • Explicit Abstention Route (Zero Tools Dispatched on OOD queries)           │
 └──────────────────────────────────────┬────────────────────────────────────────┘
                                        │
 ┌──────────────────────────────────────▼────────────────────────────────────────┐
 │               LAYER 1: AUDIO INGESTION & SIGNAL HYGIENE                       │
-│  • Multi-format Decoder (.wav, .mp3, .flac, .ogg) & Dual Mono/Stereo Loading   │
+│  • Multi-format Decoder (.wav, .mp3, .flac, .ogg) & Dual Mono/Stereo Loading  │
 │  • First-Order DC-Offset Removal Filter                                       │
 │  • Silence Gating (Threshold $\le -60\text{ dBFS}$) & Duration Guardrails     │
 │  • Consecutive Flat-Top Clipping Detector ($\ge 3$ samples at $\ge 0.99$)     │
@@ -214,7 +214,7 @@ The grounding subsystem (`src/agent/validator.py`) audits LLM responses before t
                    ▼
        ┌────────────────────────────────────────────────────────┐
        │   Regex Token Extractor:                               │
-       │   Identifies numbers, decimals, scientific notations,   │
+       │   Identifies numbers, decimals, scientific notations,  │
        │   and engineering units (Hz, kHz, dB, dBFS, %).        │
        └───────────────────────────┬────────────────────────────┘
                                    │
